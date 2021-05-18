@@ -1,0 +1,47 @@
+\section{Convergence rates with fixed RT estimators}
+Before considering more complex large-scale problems, we examine the simple RT estimator for stochastic gradient descent on convex problems.
+We assume that the sequence ~$\mathcal{L}_n(\theta)$ and units for $C$ are chosen such that~$C(n) = n$.
+We study RT-SS, with ~$q(n)$ fixed \emph{a priori}.
+We consider optimizing parameters~${\theta \in \mathcal{K}}$, where~${\mathcal{K} \subset \mathcal{R}^d}$ is a bounded, convex and compact set with diameter bounded by $D$.
+We assume~$\mathcal{L}(\theta)$ is convex in~$\theta$, and ~$G_n(\theta)$ converge according to~${||\Delta_n||_2 \leq \psi_n}$, where~$\psi_n$ converges polynomially or geometrically.
+The quantity of interest is the instantaneous regret,~${R_t = \mathcal{L}(\theta_t) - \min_{\theta} \mathcal{L} (\theta)}$, where~$\theta_t$ is the parameter after~$t$ steps of SGD.
+
+In this setting, any fixed truncation scheme using~$\mathcal{L}_N$ as a surrogate for~$\mathcal{L}$, with fixed ${N < H}$, cannot achieve~${\lim_{t \to \infty} R_t = 0}$.
+Meanwhile, the fully unrolled estimator has computation cost which scales with~$H$.
+In the many situations where~${H \to \infty}$, it is impossible to take even a single gradient step with this estimator.
+
+The randomized telescope estimator overcomes these drawbacks by exploiting the fact that~$G_n$ converges according to~$||\Delta_n||_2 \leq \psi_n$.
+As long as~$q$ is chosen to have tails no lighter than~$\psi_n$, for sufficiently fast convergence, the resulting RT-SS gradient estimator achieves asymptotic regret bounds invariant to~$H$ in terms of convergence rate.
+
+All proofs are deferred to Appendix B.
+We begin by proving bounds on the variance and expected computation for polynomially decaying~$q(n)$ and~$\psi_n$.
+\begin{theorem}\label{thm:poly}
+\textbf{Bounded variance and compute with polynomial convergence of $\psi$}.
+Assume~$\psi$ converges according to~$\psi_n \leq \frac{c_\psi}{(n)^p}$ or faster, for constants ${p > 0}$ and~$c_\psi > 0$.
+Choose the RT-SS estimator with ${q(n) \propto 1/((n)^{p + 1/2})}$.
+The resulting estimator~$\hat{G}$ achieves expected compute~${C \leq (\mathcal{H}_{H}^{p-\frac{1}{2}})^2}$, where~$\mathcal{H}_H^i$ is the~$H$th generalized harmonic number of order~$i$, and expected squared norm $\mathbb{E}[ ||\hat{G}||_2^2 ] \leq c_{\psi}^2 (\mathcal{H}_H^{p-\frac{1}{2}})^2 := \tilde{G}^2$.
+The limit~${\lim_{H \to \infty} \mathcal{H}_H^{p - \frac{1}{2}}}$ is finite iff~${p > \frac{3}{2}}$, in which case it is given by the Riemannian zeta function,~${\lim_{H \to \infty} \mathcal{H}_H^{p - \frac{1}{2}} = \zeta(p - \frac{1}{2})}$.
+Accordingly, the estimator achieves horizon-agnostic variance and expected compute bounds iff~${p > \frac{3}{2}}$.
+\end{theorem}
+
+The corresponding bounds for geometrically decaying $q(n)$ and $\psi_n$ follow.
+
+\begin{theorem}\label{thm:geom}
+\textbf{Bounded variance and compute with geometric convergence of $\psi$}.
+Assume~$\psi_n$ converges according to~${\psi_n \leq c_\psi p^n}$, or faster, for~${0 < p < 1}$.
+Choose RT-SS and with~${q(n) \propto p^n}$.
+The resulting estimator ~$\hat{G}$ achieves expected compute~${C \leq (1-p)^{-2}}$ and expected squared norm~${||\hat{G}||_2^2 \leq \frac{c_\psi}{(1-p)^2} := \tilde{G}^2}$.
+Thus, the estimator achieves horizon-agnostic variance and expected compute bounds for all~${0 < p < 1}$.
+\end{theorem}
+Given a setting and estimator~$\hat{G}$ from either \ref{thm:poly} or \ref{thm:geom}, with corresponding expected compute cost~$C$ and upper bound on expected squared norm~$\tilde{G}^2$, the following theorem considers regret guarantees when using this estimator to perform stochastic gradient descent.
+
+\begin{theorem}\label{thm:infopt}
+\textbf{Asymptotic regret bounds for optimizing infinite-horizon programs}.
+Assume the setting from \ref{thm:poly} or \ref{thm:geom}, and the corresponding~$C$ and~$\tilde{G}$ from those theorems.
+Let~$R_t$ be the instantaneous regret at the~$t$th step of optimization,~${R_t = \mathcal{L}(\theta_t) - \min_\theta \mathcal{L} (\theta)}$.
+Let~$t(B)$ be the greatest~$t$ such that a computational budget~$B$ is not exceeded.
+Use online gradient descent with step size~${\eta_t = \frac{D}{\sqrt{t} \mathbb{E}[||\hat{G}||_2^2]}}$.
+As~${B \to \infty}$, the asymptotic instantaneous regret is bounded by~${R_{t(B)} \leq \mathcal{O} (\tilde{G} D \sqrt{\frac{C}{B}})}$, independent of~$H$.
+\end{theorem}
+
+Theorem \ref{thm:infopt} indicates that if~$G_n$ converges sufficiently fast and~$\mathcal{L}_n$ is convex, the RT estimator provably optimizes the limit.

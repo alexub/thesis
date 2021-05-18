@@ -1,0 +1,78 @@
+\section{Introduction}
+\label{sec:metapde-intro}
+Partial differential equations (PDEs) can be used to model many
+physical, biological, and mathematical systems, including those governing
+thermodynamics, continuum mechanics, and electromagnetism, and have applications
+outside physics in areas such as modeling populations, traffic,
+optimality of continuous control, and financial markets.
+Analytical solutions are rarely available for PDEs of practical importance;
+thus, computational methods to approximate PDE solutions are critical for many problems in science and engineering.
+One of the most widely used is finite element analysis (FEA).
+In FEA, the continuous problem is discretized, with the solution represented by a
+piecewise polynomial on a mesh.
+
+Solving PDEs with FEA can be computationally prohibitive, particularly when the problem
+geometry requires use of a fine mesh, as the size of the system to be solved grows
+proportional to the number of mesh cells.
+The computational expense is exacerbated for parameter identification or design
+optimization.
+In this case, the PDE must be solved at each step of a procedure optimizing some set of
+design or system parameters to maximize a design objective or minimize discrepancy of
+the solution from data.
+Given a solution to the PDE, the \emph{adjoint method}
+\citep{lions1971optimal,mitusch2019dolfin} may be used to obtain the gradient of
+an objective computed from the solution with respect to the PDE parameters with cost
+equivalent to a single solve of the \emph{linearized} PDE.
+Therefore, the key bottleneck to optimization of PDE parameters is the "forward pass"
+of obtaining an accurate solution.
+
+\emph{Surrogate modeling} typically involves fitting a model to map from PDE parameters
+in a vector basis to coefficients of an approximate solution in another vector basis.
+The model is trained on a distribution of PDEs to correctly predict their solution
+or to satisfy the associated PDE constraints.
+These bases are fixed across the class of problems to be amortized.
+However, different problems may require different meshes to represent the solution,
+source terms, or boundary conditions, or may demand different representations
+for the geometry itself.
+Even generating a mesh which can adequately represent the geometry and solution
+of a single problem can be difficult.
+Surrogate modeling approaches are usually therefore restricted to scenarios where we
+can fix a mesh or at least represent geometry, parameters, and solution with
+fixed coefficient vectors.
+
+Meanwhile, neural networks have long been researched as a basis with which
+to solve PDEs, and have seen considerable recent interest.
+Mesh-free methods such as neural networks remove some of the difficulties with
+generating meshes and bases to model complex geometry.
+Neural networks also alow blending observations with PDE constraints to approximate
+a solution field even when the data does not come in a form amenable to being
+imposed as boundary conditions \citep{raissi2019physics}.
+However, neural networks take far too long to optimize to fit a given PDE to
+be competitive with finite-element methods.
+
+We use meta-learning to accelerate fitting neural networks to satisfy PDE constraints.
+This lets us develop a new, "functional" API for surrogate modeling, which can handle
+arbitrary geometries and removes the need to fix a mesh or to fix vector bases for the
+PDE parameters or solution.
+For a given PDE, our surrogate model takes as input
+(i) samplers which can sample points uniformly on each region of the domain, and
+(ii) a loss function encoding the PDE constraint or boundary condition for each such region.
+Combining these allows unbiased estimation of a variational energy which measures
+deviation of a given solution field from the governing equations.
+We use a neural network to model the solution field, and train a neural network
+initialization to converge quickly across a distribution of tasks
+a la MAML, \citet{finn2017model}; in our case each task in the distribution
+is minimizing the variational energy for a PDE with given domain, boundary
+conditions and governing equations.
+
+Our scheme has several important properties.
+It does not require supervised data provided by expensive PDE solvers.
+It does not place any assumptions on the structure of the geometry, and does not
+require geometry to be fixed across PDEs or for the user to define a parametric
+representation of varying geometry.
+Similarly, it does not place any assmptions on the structure of the PDE constraints and
+boundary conditions.
+Geometry and governing equations are free to vary as long as the user can supply an
+appropriate sampler or loss function.
+It also provides the first way to train a neural network to satisfy a PDE
+with competitive or faster speed to finite element analysis.

@@ -1,0 +1,147 @@
+
+\section{Adaptive RT estimators}
+In practice, the estimator considered in the previous section may have high variance.
+This section develops an objective for designing such estimators, and derives closed-form~$W(n, N)$ and~$q$ which maximize this objective given estimates of~$\mathbb{E}[||\Delta_i||_2^2]$ and assumptions on~$\Cov(\Delta_i, \Delta_j)$.
+
+\subsection{Choosing between unbiased estimators}
+We propose choosing an estimator which achieves the best lower bound on on the expected improvement per compute unit spent, given smoothness assumptions on the loss.
+Our analysis builds on that of \citet{balles2016coupling}: they adaptively choose a batch size using batch covariance information, while we choose between between arbitrary unbiased gradient estimators using knowledge of those estimators' expected squared norms and computation cost.
+
+Here we assume that the true gradient of the objective~$\nabla_\theta \mathbb{E}[ \mathcal{L}(\theta)] := \nabla_\theta$ (for compactness of notation) is smooth in~$\theta$.
+We do not assume convexity.
+Note that ~$\nabla_\theta$ is not necessarily equal to~$G(\theta)$, as the loss~$\mathcal{L}(\theta)$ and its gradient~$G(\theta)$ may be random variables due to sampling of data and/or latent variables.
+
+We assume that~$\mathcal{L}$ is~$L$-smooth (the gradients of~$\mathcal{L}(\theta)$ are $L$-Lipschitz), i.e., there exists a constant~${L > 0}$ such that ${\nabla_{\theta_b}\! -\! \nabla_{\theta_a}\! \leq\! L || \theta_b\! -\! \theta_a||_2 \quad \forall \theta_a, \theta_b \in \mathbb{R}^d}$.
+It follows \citep{balles2016coupling, bottou2018optimization} that, when performing SGD with an unbiased stochastic gradient estimator~$\hat{G}_t$,
+\begin{multline}
+\mathbb{E}[\mathcal{L}_H(\theta_t)] - \mathbb{E}[\mathcal{L}_H (\theta_{t+1})] \\ \geq
+\mathbb{E}[\eta_t \nabla_{\theta_t}^T \hat{G}_t(\theta_{t})] - \mathbb{E}[\frac{L\eta_t^2}{2} ||\hat{G}_t(\theta_{t})||_2^2]\,.
+\end{multline}
+Unbiasedness of $\hat{G}$ implies
+$\mathbb{E}[\nabla_{\theta_t}^T \hat{G}_t(\theta_t)] = ||\nabla_{\theta_t}^T||_2^2$,
+thus:
+\[
+\mathbb{E}[\mathcal{L}_H(\theta_t)] - \mathbb{E}[\mathcal{L}_H (\theta_{t+1})] \geq
+\mathbb{E}[\eta_t ||\nabla_\theta||_2^2] - \mathbb{E}[\frac{L\eta_t^2}{2} ||\hat{G}_t(\theta_{t})||_2^2]
+:= J\,.
+\]
+Above, $J$ is a lower bound on the expected improvement in the loss from one optimization step.
+Given a fixed choice of~$\hat{G}_t(\theta_t)$, how should one pick the learning rate~$\eta_t$ to maximize~$J$ and what is the corresponding lower bound on expected improvement?
+
+Optimizing~$\eta_t$ by finding~$\eta_t^\star$ s.t.~${\frac{dJ}{d\eta_t^\star} = 0}$ yields
+\begin{align}
+\eta_t^\star &= \frac{||\nabla_\theta||_2^2}{L \mathbb{E}[||\hat{G}_t(\theta_{t})||_2^2]} \propto \frac{1}{\mathbb{E}[||\hat{G}_t(\theta_{t})||_2^2]}\\
+J^\star &= \frac{||\nabla_\theta||^4}{2 L \mathbb{E}[||\hat{G}_t(\theta_{t})||_2^2]} \propto \frac{1}{\mathbb{E}[||\hat{G}_t(\theta_{t})||_2^2]}
+\end{align}
+This tells us how to choose~$\eta_t$ if we know~$L$,~$||\hat{G}||_2^2$, etc.
+In practice, it is unlikely we know~$L$ or even~$||\nabla_{\theta_t}||_2$.
+We might assume we have access to some ``reference'' learning rate~$\bar{\eta_t}$, which has been optimized for use with a ``reference'' gradient estimator~$\bar{G}_t$, with known~$\mathbb{E}[||\bar{G}_t||_2^2]$. For example, when using
+RT estimators, we may have access to learning rates which have been optimized for use with the un-truncated estimator, or can find them via grid search.
+Instead of directly maximizing~$J$, we choose~$\eta_t$ for~$\hat{G}$ by maximizing \textit{improvement relative to the reference estimator} in terms of~$J$, the lower bound on expected improvement.
+
+Assume that~$\bar{\eta}_t$ has been set optimally for a problem and reference estimator~$\bar{G}$ up to some constant~$k$, i.e.,
+\begin{align}
+\bar{\eta}_t &= k \frac{||\nabla_{\theta_t}||_2^2}{L \mathbb{E}[||\bar{G}_t(\theta_{t})||_2^2]}\,.
+\end{align}
+\vspace{-1.25\baselineskip}
+
+Then the expected improvement~$\bar{J}$ obtained by the reference estimator~$\bar{G}$ is:
+\vspace{-1.75\baselineskip}
+
+\begin{align}
+\bar{J} &= (k - \frac{k^2}{2}) \frac{||\nabla_{\theta_t}||^4}{2 L \mathbb{E}[||\bar{G}_t(\theta_{t})||_2^2]}
+\end{align}
+\vspace{-1.25\baselineskip}
+
+
+We assume that~${0 < k < 2}$, such that~$\bar{J}$ is positive and the reference has guaranteed expected improvement.
+Now set the learning rate according to
+\vspace{-1.75\baselineskip}
+
+\begin{align}
+\label{eq:rel-lr}
+\eta_t &=
+\bar{\eta_t} \frac{\mathbb{E}[||\hat{G}_t||_2^2]}{\mathbb{E}[||\bar{G}_t||_2^2]}\,.
+\end{align}
+\vspace{-1.25\baselineskip}
+
+It follows that the expected improvement~$\hat{J}$ obtained by the estimator~$\hat{G}$ is
+\vspace{-1.75\baselineskip}
+
+\begin{align}
+\hat{J} &= \frac{\mathbb{E}[||\bar{G}_t(\theta_{t})||_2^2]}{\mathbb{E}[||\hat{G}_t(\theta_{t})||_2^2]} \bar{J}
+\end{align}
+\vspace{-1.25\baselineskip}
+
+Let the expected computation cost of evaluating~$\hat{G}$ be~$\hat{C}$.
+We want to maximize~$\hat{J}/\hat{C}$.
+If we use the above method to choose~$\eta_t$, we have~${\frac{\hat{J}}{\hat{C}} \propto \big(\hat{C} \mathbb{E} ||\hat{G}_t(\theta_{t})||_2^2 \big)^{-1}}$.
+We call ${\big(\hat{C} \mathbb{E} ||\hat{G}_t(\theta_{t})||_2^2\big)^{-1}}$ the \textit{relative optimization efficiency}, or ROE.
+We decide between gradient estimators~$\hat{G}$ by choosing the one which maximizes the ROE.
+Once an estimator is chosen, one should choose a learning rate according to (\ref{eq:rel-lr}) relative to a reference learning rate~$\bar{\eta}$ and estimator~$\bar{G}$.
+
+\subsection{Optimal weighted sampling for RT estimators}
+Now that we have an objective for choosing between unbiased stochastic gradient estimators with varying computation, we can consider designing randomized telescope estimators which optimize the ROE.
+For the classes of single sample and Russian roulette estimators, we prove conditions under which that class maximizes the ROE across an arbitrary choice of RT estimators.
+We also derive closed-form expressions for the optimal sampling distribution~$q$ for each class, under the conditions where that class is optimal.
+
+In this section, we assume that computation can be reused and evaluating~${\hat{G}_H = \sum_{n=1}^N \Delta_n W(n, N)}$ has computation cost~$C(N)$.
+As described in Section 3.1, this is approximately true for many objectives.
+When it is not, the cost of computing $\sum_{n=1}^N \Delta_n W(n, N)$ is $\sum_{n=1}^N C(n) \mathbbm{1}\{(W(n, N) \neq 0) \text{ or } (W(n+1, N) \neq 0) \}$.
+This would penalize the ROE of dense ~$W(n, N)$ and favor sparse~$W(n, N)$, possibly impacting the optimality conditions for RT-RR.
+We mitigate this inaccuracy by subsequence selection (described in the following subsection), which allows construction of sparse sampling strategies.
+
+We begin with the RT-SS estimator, showing this is minimax-optimal with regards to an adversarial choice of diagonal covariances $\Cov(\Delta_i, \Delta_j)$, and deriving the optimal sampling distribution $q(N)$.
+\begin{theorem}\label{thm:advcorr-w} \textbf{Optimality of RT-SS under adversarial correlation.}
+Consider the family of estimators presented in Equation  \ref{eq:rt_general}.
+Assume $\theta$, $\nabla_\theta$, and $G$ are univariate.
+For any fixed sampling distribution $q$, the single-sample RT estimator RT-SS minimizes the worst-case variance of $\hat{G}$ across an adversarial choice of covariances~${\Cov(\Delta_i, \Delta_j) \leq \sqrt{\Var(\Delta_i)} \sqrt{\Var(\Delta_j)}}$.
+\end{theorem}
+
+\begin{theorem}\label{thm:advcorr-q} \textbf{Optimal q under adversarial correlation.}
+Consider the family of estimators presented in Equation  \ref{eq:rt_general}.
+Assume $\Cov(\Delta_i, \Delta_i)$ and $\Cov(\Delta_i, \Delta_j)$ are diagonal.
+The RT-SS estimator with~${q_n \propto \sqrt{\frac{\mathbb{E}[||\Delta_n||_2^2}{C(n)}}}$ maximizes the ROE across an adversarial choice of diagonal covariance matrices~${\Cov(\Delta_i, \Delta_j)_{kk} \leq \sqrt{\Cov(\Delta_i, \Delta_i)_{kk} \Cov(\Delta_j, \Delta_j)_{kk}}}$.
+\end{theorem}
+We continue with the RT-RR estimator, showing this is optimal when~$\Cov(\Delta_i, \Delta_i)$ is diagonal and~$\Delta_i$ and~$\Delta_j$ are independent for~${j \neq i}$, and deriving the optimal sampling distribution~$q(N)$.
+
+\begin{theorem}\label{thm:nocorr-w} \textbf{Optimality of RT-RR under independence}.
+Consider the family of estimators presented in Eq.~\ref{eq:rt_general}.
+Assume the $\Delta_j$ are univariate.
+When the~$\Delta_j$ are uncorrelated, for any importance sampling distribution~$q$, the Russian roulette estimator achieves the minimum variance in this family and thus maximizes the optimization efficiency lower bound.
+\end{theorem}
+\begin{theorem}\label{thm:nocorr-q} \textbf{Optimal q under independence}.
+Consider the family of estimators presented in Equation  \ref{eq:rt_general}.
+Assume $\Cov(\Delta_i, \Delta_i)$ is diagonal and~$\Delta_i$ and~$\Delta_j$ are independent.
+The RT-RR estimator with
+$Q(i) \propto \sqrt{\frac{\mathbb{E} [||\Delta_i||_2^2}{C(i) - C(i-1)}]}$,
+where $Q(i) = \Pr(n \geq i) = \sum_{j=i}^H q(i)$,
+maximizes the ROE.
+\end{theorem}
+
+
+\subsection{Subsequence selection}
+The scheme for designing RT estimators given in the previous subsection
+contains assumptions which will often not hold in practice. To partially
+alleviate these concerns, we can design the \textit{sequence of iterates over
+which we apply the RT estimator} to maximize the ROE.
+
+Some sequences may result in more efficient estimators than others, depending on how the intermediate iterates $G_n$ converge to $G$.
+For example, solving an ODE with a number of steps for which the solution is unstable is unlikely to produce gradients which correlate well with the true gradient.
+The variance of the estimator, and the ROE, will be reduced if we choose a sequence $\mathcal{L}_n$ such that $G_n$ is positively correlated with $G$ for all $n$.
+
+We begin with a reference sequence $\bar{\mathcal{L}}_i$, $\bar{G}_i$, with cost function $\bar{C}$, where $i, j \in \mathcal{N}$ and $i, j \leq \bar{H}$,
+and where $\bar{G}_i$ has cost $\bar{c}_i$.
+We assume knowledge of $\mathbb{E}[||\bar{G}_i \!-\! \bar{G}_j||_2^2]$.
+We aim to find a subsequence $S \in \mathcal{S}$, where $\mathcal{S}$ is the
+set of subsequences over the integers $1 ... \bar{H}$ which have final element
+$S_{-1} = \bar{H}$. Given $S$, we take $\mathcal{L}_n = \bar{\mathcal{L}}_{S_n}$,
+$G_n = \bar{G}_{S_n}$, $C(n) = \bar{C}(S_n)$, $H = |S|$, and
+$\Delta_n = G_n - G_{n-1}$, where $G_0 := 0$.
+
+In practice, we greedily construct $S$ by adding
+indexes $i$ to the sequence $[\bar{H}]$ or removing indexes $i$ from the
+sequence $[1, 2, ..., \bar{H}]$. As this step requires minimal computation, we
+perform both greedy adding and greedy removal and return the $S$ with the best
+ROE. The minimal subsequence $S = [\bar{H}]$ is always considered,
+allowing RT estimators to fall back on the original full-horizon estimator.

@@ -1,0 +1,11 @@
+\section{Limitations and opportunities}\label{sec:discussion}
+\textbf{Use of \textsc{DAgger}}. We use \textsc{DAgger} to help CES match the ground-truth on the states encountered during the solution trajectory. This requires one to specify in advance the conditions under which the surrogate will be deployed. Investigating CES' ability to generalize to novel deployment conditions--and designing surrogates which can do so effectively--is an important direction for future work.
+
+\textbf{Error estimation, refinement, and guarantees}. Finite element methods permit a straightforward way to estimate the error (compare to the solution in a more-refined basis) and control it (via refinement). CES currently lacks these properties.
+
+\textbf{Finite element baseline}. There is an immense body of work on finite element methods and iterative solvers. We provide a representative baseline, but our work should not be taken as a comparison with the ``state-of-the-art''. We show that composable machine-learned energy surrogates enjoy advantages over a reasonable baseline, and hold promise for scalable amortization of solving modular PDEs.
+
+\textbf{Hyperparameters}. Both our method and the finite element baseline rely on a multitude of hyperparameters: the size of the spline reduced basis; the size and learning rate of the neural network; the size and degree of the finite element approximation; and the specific variant of Newton's method to solve the finite element model. We do not attempt a formal, exhaustive search over these parameters.
+
+\textbf{Known structure}. We leave much fruit on the vine in terms of engineering structure known from the  into our surrogate. For example, one could also use a more expressive normalizer than $||\rvu||_2^2$, e.g. the energy predicted by a coarse-grained linear elastic model, or exploit spatially local correlation, e.g. by using a 1-d convolutional network around the boundary of the cell.
+\vspace{-0.2cm}

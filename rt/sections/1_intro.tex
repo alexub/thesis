@@ -1,0 +1,53 @@
+\section{Introduction}
+Many important optimization problems consist of objective functions that can only be computed iteratively or as the limit of an approximation.
+Machine learning and scientific computing provide many important examples.
+In meta-learning, evaluation of the objective typically requires the training of a model, a case of bi-level optimization.
+When training a model on sequential data or to make decisions over time, each learning step requires looping over time steps.
+More broadly, in many scientific and engineering applications one wishes to optimize an objective that is defined as the limit of a sequence of approximations with both fidelity and computational cost increasing according to a natural number~${n\geq 1}$.
+Inner-loop examples include: integration by Monte Carlo or quadrature with~$n$ evaluation points; solving ordinary differential equations (ODEs) with an Euler or Runge Kutta method with~$n$ steps and~$\mathcal{O}(\frac{1}{n})$ step size;
+and solving partial differential equations (PDEs) with a finite element basis with size or order increasing with~$n$.
+
+Whether the task is fitting parameters to data, identifying the parameters of a natural system, or optimizing the design of a mechanical part, in this work we seek to more rapidly solve problems in which the objective function demands a tradeoff between computational cost and accuracy.
+We formalize this by considering parameters~$\theta\in\mathbb{R}^D$ and a loss function~$\mathcal{L}(\theta)$ that is the uniform limit of a sequence~$\mathcal{L}_n(\theta)$:
+\begin{align}
+\min_\theta \mathcal{L}(\theta) &= \min_\theta\lim_{n\to\infty}\mathcal{L}_n(\theta)\,.
+\label{eqn:opt-problem}
+\end{align}
+In some problems there may be a finite~${n=H}$ (horizon) that achieves the limit.
+We also introduce a cost function~${C:\mathbb{N}_{+}\to\mathbb{R}}$ that is nondecreasing in~$n$ to represent the cost of computing $\mathcal{L}_n$ and its gradient.
+
+A principal challenge of optimization problems with the form in Eq.\ref{eqn:opt-problem} is selecting a finite~$N$ such that the minimum of the surrogate~$\mathcal{L}_N$ is close to that of~$\mathcal{L}$, but without~$\mathcal{L}_N$ (or its gradients) being too expensive.
+Choosing a large $N$ can be computationally prohibitive, while choosing a small $N$ may bias optimization.
+Meta-optimizing learning rates with truncated horizons can choose wrong hyperparameters by orders of magnitude \cite{wu2018understanding}.
+Truncating backpropogation through time for recurrent neural networks (RNNs) favors short term dependencies \cite{tallec2017unbiasing}.
+Using too coarse a discretization to solve an ODE or PDE can cause error in the solution and bias outer-loop optimization.
+These optimization problems thus experience a sharp trade off between efficient computation and bias.
+
+We propose \emph{randomized telescope} (RT) gradient estimators, which provide cheap unbiased gradient estimates to allow efficient optimization of these objectives.
+RT estimators represent the objective or its gradients as a telescoping series of differences between intermediate values, and draw weighted samples from this series to maintain unbiasedness while balancing variance and expected computation.
+
+The paper proceeds as follows.
+Section 2 introduces RT estimators and their history.
+Section 3 formalizes using RT estimators for optimization, and discusses related work in optimization.
+Section 4 proves RT estimators can achieve optimization guarantees for loops and limits.
+Section 5 discusses designing RT estimators by maximizing a bound on expected improvement per unit of computation.
+Section 6 describes practical considerations adapting RT estimators online.
+Section 7 presents experimental results.
+Section 8 discusses limitations and future work.
+Appendix A presents algorithm pseudocode.
+Appendix B presents proofs.
+
+% save some of these refs to add back in
+%An important subclass of such objectives is the output of programs with an
+%inner loop. Here,
+%$X_n$ is some output after unrolling the loop for $n$
+%(or a monotonic function of $n$) steps.
+%Examples include recurrent and sequence models,
+%learning algorithms and meta-learners,
+%the deployment of policies in an RL environment,
+%models which include repeated application of an operator as part of
+%their forward pass such as hypernetwork-CNNs \cite{ha2016hypernetworks}
+%or neural ODEs \cite{chen2018neural},
+%iterative solution of optimization problems,
+%and iterative methods
+%for solving systems of equations.

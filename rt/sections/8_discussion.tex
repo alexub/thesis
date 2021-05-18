@@ -1,0 +1,20 @@
+
+\section{Limitations and future work}
+\textbf{Other optimizers}.
+We develop the lower bound on expected improvement for SGD.
+Important future directions would investigate adaptive and momentum-based SGD methods such as Adam \citep{kingma2014adam}.
+
+\textbf{Tuning step}.
+Our method includes a tuning step which requires computation.
+It might be possible to remove this tuning step by estimating covariance structure online using just the values of $\hat{G}$ observed during each optimization step.
+
+\textbf{RT estimators beyond RT-SS and RT-RR}.
+There is a rich family defined by choices of $q$ and $W(n, N)$.
+The optimal member depends on covariance structure between the $G_i$.
+We explore RT-SS and RT-RR under strict covariance assumptions.
+Could we relax these assumptions and derive or optimize approximately optimal estimators across the wider family?
+This could improve adaptive estimator performance for high-dimensional problems such as training RNNs.
+
+\textbf{Predictive models of the sequence limit}.
+Using any sequence $G_n$ with RT yields an unbiased estimator as long as the sequence is consistent, i.e. its limit $G$ is the true gradient.
+Combining randomized telescopes with predictive models of the gradients \citep{jaderberg2017decoupled, weber2019credit} might yield a fast-converging sequence, leading to estimators with low computation and variance.

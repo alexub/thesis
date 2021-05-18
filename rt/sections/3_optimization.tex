@@ -1,0 +1,57 @@
+\section{Optimizing loops and limits}
+In this paper, we consider optimizing functions defined as limits, where loops are an important special case.
+Consider a problem where, given parameters~$\theta$ we can obtain a series of approximate losses $\mathcal{L}_n(\theta)$, which converges uniformly to some limit ${\lim_{n \to H} \mathcal{L}_n := \mathcal{L}}$, for ~${n\in\mathbb{N}_{+}}$ and~${H\in\mathbb{N}_{+}\cup\{\infty\}}$.
+We assume the sequence of gradients with respect to~$\theta$, denoted ${G_n(\theta) := \nabla_\theta\mathcal{L}_n(\theta)}$ converge uniformly to a limit ~${G(\theta)}$.
+Under this uniform convergence and assuming convergence of $\mathcal{L}_n$, we have ~${\lim_{n \to H} \nabla_{\theta}\mathcal{L}_n(\theta) = \nabla_{\theta}\lim_{n \to H}\mathcal{L}_n(\theta)}$ (see Theorem 7.17 in \citet{rudin1976principles}), and so ~${G(\theta)}$ is indeed the gradient of our objective ~${\mathcal{L}(\theta)}$.
+We assume there is some computation cost $C(n)$ associated with evaluating~$\mathcal{L}_n$ or $G_n$, which is nondecreasing with $n$, and we wish to efficiently minimize $\mathcal{L}$ with respect to~$\theta$.
+Loops are a special case of this framework, where $\mathcal{L}_n$ is the loss resulting from running the loop for some number of steps increasing in $n$.
+
+\subsection{Randomized telescopes for optimization}
+We propose using randomized telescopes to provide a stochastic gradient estimator for such optimization problems.
+Our aim is to accelerate optimization in much the same manner as minibatch stochastic gradient descent accelerates optimization for large datasets: using sampling to decrease the expected computation cost of each optimization step, at the price of increasing variance in the gradient estimates, without introducing bias.
+
+Consider the gradient~${G(\theta) = \lim_{n \to H} G_n(\theta)}$, and the backward difference ${\Delta_n(\theta) = G_n(\theta) - G_{n-1}(\theta)}$, where~${G_0(\theta) = 0}$, so that~${G(\theta) = \sum_{n=1}^H \Delta_n(\theta)}$.
+We use the randomized telescope estimator
+\begin{align}
+\hat{G}(\theta) &= G_N(\theta) = \sum_{n=1}^N\Delta_n(\theta) W(n,N)
+\end{align}
+where ${N \in \{1,2,\ldots,H\}}$ is drawn according to a proposal distribution~$q$, and together~$W$ and~$q$ satisfy proposition~\ref{prop:unbiased}.
+
+Note that due to linearity of differentiation, and letting ${\mathcal{L}_0(\theta) := 0}$, we have
+\begin{align*}
+\sum_{n=1}^N\! \Delta_n(\theta) W(n, N) =
+\nabla_\theta\!\! \sum_{n=1}^N\!
+(\mathcal{L}_n(\theta)\! -\! \mathcal{L}_{n-1}(\theta))  W(n, N)\,.
+\end{align*}
+Thus, when computing $\mathcal{L}_n(\theta)$ can reuse most of the computation performed for computing $\mathcal{L}_{n-1}(\theta)$, we can evaluate~$\hat{G}_N(\theta)$ via forward or backward automatic differentiation with cost approximately equal to computing~$G_N(\theta)$, i.e.,~$\hat{G}_N(\theta)$ has computation cost $\approx C(N)$.
+This most often occurs when evaluating $\mathcal{L}_n(\theta)$ involves an inner loop and the step size used for the inner loop does not change with~$n$, such as in meta-learning and training RNNs.
+When computing $\mathcal{L}_n(\theta)$ does not reuse computation, e.g., when solving an ODE or PDE where~$n$ describes how fine a discretization to use, evaluating $\hat{G}_N(\theta)$ requires separately computing $\mathcal{L}_n(\theta)$ for all~${n \leq N}$ for which~${W(n, N) \neq 0}$, i.e.,~$\hat{G}_N(\theta)$ has computation cost~${\sum_{n=1}^N C(n) \mathbbm{1} \{W(n, N) \neq 0\}}$.
+
+\subsection{Related work in optimization}
+Gradient-based bilevel optimization has seen extensive work in literature.
+See \citet{jameson1988aerodynamic} for an early example of optimizing implicit functions, \citet{christianson1998reverse} for a mathematical treatment, and \citet{maclaurin2015gradient, franceschi2017forward} for recent treatments in machine learning.
+\citet{shaban2018truncated} propose truncating only the backward pass by only backpropagating through the final few optimization steps to reduce memory requirements.
+\citet{metz2018learned} propose linearly increasing the number of inner steps over the course of the outer optimization.
+
+An important case of bi-level optimization is optimization of architectures and hyperparameters.
+Truncation causes bias, as shown by \citet{wu2018understanding} for learning rates and by \citet{metz2018learned} for neural optimizers.
+
+Bi-level optimization is also used for meta-learning across related tasks \citep{schmidhuber1987evolutionary, bengio1992optimization}.
+\citet{ravi2016optimization} train an initialization and optimizer, and \citet{finn2017model} only an initialization, to minimize validation loss.
+The latter paper shows increasing performance with the number of steps used in the inner optimization.
+However, in practice the number of inner loop steps must be kept small to allow training over many tasks.
+
+Bi-level optimization can be accelerated by amortization.
+Variational inference can be seen as bi-level optimization; variational autoencoders \citep{kingma2013auto} amortize the inner optimization with a predictive model of the solution to the inner objective.
+Recent work such as \citet{brock2018smash, lorraine2018stochastic} amortizes hyperparameter optimization in a similar fashion.
+
+However, amortizing the inner loop induces bias.
+\citet{cremer2018inference} demonstrate this in VAEs, while \citet{kim2018semi} show that in VAEs, combining amortization with truncation by taking several gradient steps on the output of the encoder can reduce this bias.
+This shows these techniques are orthogonal to our contributions: while fully amortizing the inner optimization causes bias, predictive models of the limit can accelerate convergence of $\mathcal{L}_n$ to $\mathcal{L}$.
+
+Our work is also related to work on training sequence models.
+\citet{tallec2017unbiasing} use the Russian roulette estimator to debias truncated backpropagation through time.
+They use a fixed geometrically decaying~$q(N)$, and show that this improves validation loss for Penn Treebank.
+They do not consider efficiency of optimization, or methods to automatically set or adapt the hyperparameters of the randomized telescope.
+\citet{trinh2018learning} learn long term dependencies with auxiliary losses.
+Other work accelerates optimization of sequence models by replacing recurrent models which require backpropagation through time with models which use convolution or attention \citep{vaswani2017attention}, which can be trained more efficiently.

@@ -1,0 +1,533 @@
+\section{Contents}
+This appendix consists of:
+\begin{itemize}
+  \item specification of the data generating distribution and hyperparameters;
+  \item visualization of data generated via Hamiltonian Monte Carlo;
+  \item visualization of data generated via \textsc{DAgger};
+  \item hyperparameters used for neural network specification and training;
+  \item ablation study of neural network design choices;
+  \item specification of the finite element meshes used as baselines;
+  \item visualization of all solutions found under compression and tension
+  for each pore shape for each baseline mesh and the composed energy surrogate.
+\end{itemize}
+
+\clearpage
+\section{Data generation with Hamiltonian Monte Carlo}
+We use 100 data collectors, each with randomly drawn hyperparameters, which
+each terminate (and have their place taken by a newly initialized collector)
+after sampling 25 data points.
+We collect 60,000 data points, consisting of a training set of 55,000 and a validation set of 5,000.
+As our distribution is arbitrary, and as we assume that more data is always a good thing, when a HMC sample is rejected, we still add it to the dataset, but return to the last un-rejected sample to continue the Markov chain.
+
+Hyperparameter distributions are chosen heuristically such that the finite element simulation tends to converge in a reasonable amount of time.
+The hyperparameter distributions are as follows:
+
+\begin{itemize}
+\item Leapfrog step size: $\mathcal{U}(0.005, 0.02)$
+\item Leapfrog path length: $\mathcal{U}(0.05, 0.3)$
+\item Temperature used to scale the log-probability: $\mathcal{U}([0.0001,0.0005,0.001,0.005,0.01,0.05,0.1])$
+\item Standard deviation of the Gaussian from which the Hamiltonian momentum is drawn: $\mathcal{U}(0.01, 0.3)$
+\end{itemize}
+
+We approximate the macroscopic strain tensor $\bar{x}$ from $\mathbf{u}$ as:
+
+\resizebox{\linewidth}{!}{
+  \begin{minipage}{\linewidth}
+\begin{align*}
+\bar{x}(\mathbf{u}) = \frac{1}{N} \begin{bmatrix}
+\displaystyle\sum_{X \in \text{rhs}} \!\!u_1(X) \!-\!\!\! \sum_{X \in \text{lhs}} \!\!u_1(x)
+&
+\displaystyle\sum_{X \in \text{rhs}} \!\!u_2(X) \!-\!\!\! \sum_{X \in \text{lhs}} \!\!u_2(X)
+\\
+\displaystyle\sum_{X \in \text{top}} \!\!u_1(X) \!-\!\!\! \sum_{X \in \text{bot}} \!\!u_1(x)
+&
+\displaystyle\sum_{X \in \text{top}} \!\!u_2(X) \!-\!\!\! \sum_{X \in \text{bot}} \!\!u_2(X)
+\end{bmatrix}
+\end{align*}
+\end{minipage}
+}
+
+Above,~$u_1(X)$ and~$u_2(X)$ are horizontal and vertical displacements defined by $\mathbf{u}$ at a point $X$, and top, bot, lhs and rhs are the set of control point locations for the splines on the top, bottom, left and right of the component.
+
+\clearpage
+
+\section{Visualizing HMC data}
+Here we display 24 randomly chosen examples from the training set.
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=.7\linewidth]{lces/hmc_viz.png}
+\end{figure}
+
+\clearpage
+
+\section{Visualizing \textsc{DAgger} data}
+Here we display 24 randomly chosen examples from the data collected with \textsc{DAgger}.
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=.7\linewidth]{lces/dagger_viz.png}
+\end{figure}
+
+\section{Neural network hyperparameters}
+We use a fully-connected neural network with three hidden layers of 512 units, Swish nonlinarities, and He initialization.
+We optimize our neural network using Adam with a learning rate of 3e-4 and a batch size of 512.
+
+\section{Surrogate design ablation study}
+We perform an ablation study by switching on and off the following independent variables:
+\begin{itemize}
+\item "Scale": parameterizing the log of the scalar stiffness, vs parameterizing energy directly;
+\item "Remove rigid": removing rigid body translations from the data via Procrustes analysis;
+\item "Sobolev-G": Sobolev training on energy gradients;
+\item "Sobolev-Hvp": Sobolev training on energy Hessian-vector products.
+\end{itemize}
+We measure performance after 10,000 training steps (93 epochs) on the training set, without \textsc{DAgger}.
+We evaluate each model on the validation dataset using the following metrics:
+\begin{itemize}
+\item "E \%err": the error in predicted energy, expressed as a percentage of the true energy;
+\item "G-sim": the cosine similarity between predicted and true gradients;
+\item "Hvp-sim": the cosine similarity between predicted and true Hessian-vector products.
+\end{itemize}
+Results are shown below. For the independent variables, a value of '1' indicates that method or technique was turned on, while a value of '0' indicates it was turned off.
+
+Each design choice improves the validation metrics.
+"Remove rigid" has marginal impact, as our training displacements contain little rigid body transformation.
+We leave this feature in as it causes no harm;
+as it improved performance under earlier dataset creation methods which resulted in more rigid body translation;
+and as removing translations before computing energy is necessary to be able to compose energy surrogates by tiling.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/ablation.png}
+\end{figure}
+
+\section{Finite element baselines}
+We generate meshes for the finite element baselines using two parameters: pore resolution, and minimum mesh resolution.
+Firstly, for each pore in the cellular solid, we generate a polygon representing that pore using a number of points equal to pore resolution.
+We let the material domain be the overall volume of the solid with these polygons subtracted.
+Next, we generate a mesh over the material domain using \textsc{mshr}'s automated mesh generation routine,
+passing as resolution minimum mesh resolution multiplied by the number of cells.
+In \textsc{mshr}, the resolution parameter controls the maximum cell size, which
+is the diameter of the domain's bounding circle divided by the resolution.
+It should be noted that cells can be much smaller than this maximum size, or there
+can be many more cells than the resolution parameter would imply, as \textsc{mshr}
+will place one cell vertex on each point used to construct the domain geometry (i.e. each point in the pore polygon).
+
+\section{Benchmark visualizations}
+In the following pages we visualize the solutions found for each pore by each FEA mesh and by CES.
+For each pore we use six different finite element meshes.
+These respectively used $[4, 8, 16, 32, 48, 64]$ points used to define the geometry of each pore, and minimum of $[1, 2, 4, 8, 12, 16]$ internal mesh vertices along a given axis per pore.
+Given these parameters and the geometry of the material domain, meshes were created using the automatic mesh generation tool from mshr (the mesh generation component of FEniCS).
+We include the number of degrees of freedom in the finite element basis in each plot.
+We superimpose the solution found with CES in red dots on the solution found with FEA.
+The CES solution has 690 degrees of freedom in all cases.
+
+
+\subsection{Compression}
+\begin{figure}[H]
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_0_mesh_0.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_0_mesh_1.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_0_mesh_2.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_0_mesh_3.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_0_mesh_4.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_0_mesh_5.png}
+\end{subfigure}
+\end{figure}
+
+\begin{figure}[H]
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_1_mesh_0.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_1_mesh_1.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_1_mesh_2.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_1_mesh_3.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_1_mesh_4.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_1_mesh_5.png}
+\end{subfigure}
+\end{figure}
+
+\begin{figure}[H]
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_2_mesh_0.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_2_mesh_1.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_2_mesh_2.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_2_mesh_3.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_2_mesh_4.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_2_mesh_5.png}
+\end{subfigure}
+\end{figure}
+
+\begin{figure}[H]
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_3_mesh_0.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_3_mesh_1.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_3_mesh_2.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_3_mesh_3.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_3_mesh_4.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_3_mesh_5.png}
+\end{subfigure}
+\end{figure}
+
+\begin{figure}[H]
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_4_mesh_0.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_4_mesh_1.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_4_mesh_2.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_4_mesh_3.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_4_mesh_4.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_4_mesh_5.png}
+\end{subfigure}
+\end{figure}
+
+\begin{figure}[H]
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_5_mesh_0.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_5_mesh_1.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_5_mesh_2.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_5_mesh_3.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_5_mesh_4.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_5_mesh_5.png}
+\end{subfigure}
+\end{figure}
+
+\begin{figure}[H]
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_6_mesh_0.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_6_mesh_1.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_6_mesh_2.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_6_mesh_3.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_6_mesh_4.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_compression/bm_6_mesh_5.png}
+\end{subfigure}
+\end{figure}
+
+\clearpage
+
+\subsection{Tension}
+
+\begin{figure}[H]
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_0_mesh_0.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_0_mesh_1.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_0_mesh_2.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_0_mesh_3.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_0_mesh_4.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_0_mesh_5.png}
+\end{subfigure}
+\end{figure}
+
+\begin{figure}[H]
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_1_mesh_0.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_1_mesh_1.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_1_mesh_2.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_1_mesh_3.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_1_mesh_4.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_1_mesh_5.png}
+\end{subfigure}
+\end{figure}
+
+\begin{figure}[H]
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_2_mesh_0.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_2_mesh_1.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_2_mesh_2.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_2_mesh_3.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_2_mesh_4.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_2_mesh_5.png}
+\end{subfigure}
+\end{figure}
+
+\begin{figure}[H]
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_3_mesh_0.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_3_mesh_1.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_3_mesh_2.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_3_mesh_3.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_3_mesh_4.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_3_mesh_5.png}
+\end{subfigure}
+\end{figure}
+
+\begin{figure}[H]
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_4_mesh_0.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_4_mesh_1.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_4_mesh_2.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_4_mesh_3.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_4_mesh_4.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_4_mesh_5.png}
+\end{subfigure}
+\end{figure}
+
+\begin{figure}[H]
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_5_mesh_0.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_5_mesh_1.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_5_mesh_2.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_5_mesh_3.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_5_mesh_4.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_5_mesh_5.png}
+\end{subfigure}
+\end{figure}
+
+\begin{figure}[H]
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_6_mesh_0.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_6_mesh_1.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_6_mesh_2.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_6_mesh_3.png}
+\end{subfigure}
+\newline
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_6_mesh_4.png}
+\end{subfigure}
+\begin{subfigure}{.45\textwidth}
+  \centering
+  \includegraphics[width=.8\linewidth]{lces/vis_tension/bm_6_mesh_5.png}
+\end{subfigure}
+\end{figure}

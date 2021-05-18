@@ -1,0 +1,85 @@
+\section{Meta-learning mesh-free PDE operators}
+We propose Meta-PDE, an approach which meta-learns mesh-free PDE operators and
+provides a new, functional API for PDE surrogate modeling.
+Most PDEs can be fully defined by specification of:
+\begin{itemize}
+  \item a domain $\Omega$ with boundary $\partial \Omega$,
+  \item an operator $\mathcal{F}$ representing governing equations,
+  \item and an operator $\mathcal{G}$ representing boundary conditions.
+\end{itemize}
+We aim for a surrogate model with an input schema as close to this general specification as possible.
+Meta-PDE uses meta-learning, and specifically MAML \citep{}, to achieve this.
+Meta-PDE's parameters are the initial parameters $\theta_0$ for a neural network
+$u_\theta$ representing
+a function $u: \mathbb{R}^{d_\Omega} \to \mathbb{R}^{d_u}$,
+and per-parameter per-step learning rates $\alpha_k$.
+The geometric dimension $\mathbb{R}^{d_\Omega}$ and solution dimension $\mathbb{R}^{d_u}$
+must remain fixed across PDEs in the distribution, even though $\Omega$ is allowed to vary.
+When using Meta-PDE as a surrogate to compute an approximate solution to a given PDE
+(one 'example' or 'task'),
+the inputs to the Meta-PDE model are:
+\begin{itemize}
+  \item a sampler $s(\Omega)$ which returns points in the domain $\Omega$,
+  \item a sampler $s(\partial\Omega)$ which returns points on the boundary $\partial\Omega$,
+  \item an operator $\mathcal{F}$ representing governing equations,
+  \item and an operator $\mathcal{G}$ representing boundary conditions.
+\end{itemize}
+
+The operators $\mathcal{F}$ and $\mathcal{G}$ may be supplied directly and do not
+require a particular parametric form.
+The user must suppy a sampler for the domain and for the boundary of each PDE within
+the training disribution and for each PDE seen during deployment.
+A sampler can easily be constructed for any domain for which we have a mesh,
+but it is also often easier to construct a sampler than to construct an accurate mesh.
+Finite element models usually use piecewise linear meshes, which can take many elements
+to accurately represent curved shapes: even when using piecewise polynomially-shaped meshes,
+the slow rate of convergence of using these meshes to approximate
+non-polynomial geometry can be a major source of error and/or computational expense
+for FEA.
+Given an inside-outside oracle for the domain, it is easy to use rejection sampling
+to sample from it exactly.
+Most parametric geometry representations such as those used
+in computer-aided design also allow exact sampling of the boundary, and even
+minimal representations such as signed distance functions allow approximate
+sampling \citep{brubaker2012family}.
+
+The samplers and operators are sufficient to construct an estimator $\hat{\mathcal{J}}$ for the variational
+energy $\mathcal{J}$:
+\begin{align*}
+  \mathcal{J}(u) &= \int_{\Omega} ||\mathcal{F}(u)(x)||^2_2 dx +
+  \int_{\partial\Omega} ||\mathcal{G}(u)(x)||_2^2 dx \\
+  \hat{\mathcal{J}}(u) &= \mathbb{E}_{x \sim s(\Omega)} ||\mathcal{F}(u)(x)||^2_2 +
+  \mathbb{E}_{x \sim s(\partial \Omega)} \int_{\partial \Omega} ||\mathcal{G}(u)(x)||_2^2
+\end{align*}
+$\hat{\mathcal{J}}(u)$ is unbiased as long as $s(\dot{})$ return points with
+uniform probability over their supports, or return batches of points which have uniform
+probability for any given $x$ aggregated over the batch. Unbiased estimation is not
+necessarily essential. Note $\hat{\mathcal{J}}(u) > 0$ and $\mathcal{J}(u) > 0$
+$\forall u$, and the true solution $u^*$ of the PDE achieves
+$\mathcal{J}(u) = \hat{\mathcal{J}}(u) = 0$. These properties hold if we multiply
+the integrand in $\mathcal{J}(u)$ by an arbitrary density $\mu > 0$ or if we
+choose samplers $s$ which have full support but nonuniform probability on $\Omega$
+or $\partial \Omega$. Therefore, biased sampling will not change the minimizer of the
+energy estimator if we have a sufficiently expressive hypothesis class for $u$.
+
+The "forward pass" computing an approximate solution for a given PDE involves
+a small number $K$ of inner-loop steps (we use $K=5$) of stochastic optimization,
+minimizing the variational energy $\mathcal{J}(u)$ and starting from
+the initialization $\theta_0$:
+\begin{align*}
+  \theta_k = \theta_{k-1} - \alpha_k \nabla_{\theta_{k-1}} \hat{\mathcal{J}}(u_{\theta_{k-1}}) \quad k = 1 .. K
+\end{align*}
+
+Meta-PDE returns the approixmate solution $u_{\theta_K}$, the neural network
+with the final set of parameters.
+
+To train Meta-PDE, we use a distribution of tasks, each specified by
+samplers and constraint operators for the boundary and loss, each representing a
+different PDE.
+We draw a batch of tasks with variational energy estimators $\hat{\mathcal{J}}_i$,
+$i = 1 ... n$, and unroll the inner loop to find $u_{\theta_K, i}$.
+For each task the loss is $\hat{\mathcal{J}}_i(u_{\theta_K, i})$.
+We backpropogate through the inner loop to find the gradients
+$\nabla_{\theta_0} \sum_i \frac{1}{n} \hat{\mathcal{J}}_i(u_{\theta_K, i})$
+and $\nabla_{\alpha} \sum_i \frac{1}{n} \hat{\mathcal{J}}_i(u_{\theta_K, i})$,
+which are used in an outer loop to train the model.

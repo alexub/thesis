@@ -1,0 +1,69 @@
+\section{Unbiased randomized truncation}
+In this section, we discuss the general problem of estimating limits through randomized truncation.
+The first subsection presents the randomized telescope family of unbiased estimators, while the second subsection describes their history (dating back to von Neumann and Ulam).
+In the following sections, we will describe how this technique can be used to provide cheap unbiased gradient estimates and accelerate optimization for many problems.
+
+\subsection{Randomized telescope estimators}
+Consider estimating any quantity~${Y_H := \lim_{n \to H} Y_n}$ for~${n\in\mathbb{N}_{+}}$ where~${H\in\mathbb{N}_{+}\cup\{\infty\}}$.
+Assume that we can compute $Y_n$ for any finite~${n\in\mathbb{N}_{+}}$, but since the cost is nondecreasing in~$n$ there is a point at which this becomes impractical.
+Rather than truncating at some fixed value short of the limit, then, we may find it useful to construct an unbiased estimator of~$Y_H$ and take on some randomness in return for reduced computational cost.
+
+Define the backward difference~$\Delta_n$ and represent the quantity of interest $Y_H$ with a telescoping series:
+\begin{align*}
+Y_H &= \sum_{n=1}^H \Delta_n & \text{where}\quad    \Delta_n &= \begin{cases}
+    Y_n - Y_{n-1} & n > 1\\
+    Y_1 & n = 1
+    \end{cases}\,.
+\end{align*}
+We may sample from this telescoping series to provide unbiased estimates of~$Y_H$, introducing variance to our estimator in exchange for reducing expected computation.
+We use the name \emph{randomized telescope} (RT) to refer to the family of estimators indexed by a distribution~$q$ over the integers~${1,\ldots,H}$ and a weight function $W(n, N)$:
+\begin{align}\label{eq:rt_general}
+\hat{Y}_H = \sum_{n=1}^N \Delta_n W(n, N) \quad \quad  N \in \{1,\ldots,H\} \sim q\,.
+\end{align}
+
+\begin{proposition}\label{prop:unbiased}
+\textbf{Unbiasedness of RT estimators.}
+The RT estimators in (\ref{eq:rt_general}) are unbiased estimators of
+$Y_H$ as long as
+\begin{align}
+\mathbb{E}_{N\sim q} [W(n, N)] = \sum_{N=n}^H W(n, N)q(N) = 1 \quad \forall n\,.
+\end{align}
+\end{proposition}
+%
+See Appendix B for a short proof.
+Although we are coining the term ``randomized telescope'' to refer to the family of estimators with the form of Eq.~\ref{eq:rt_general}, the underlying trick has a long history, discussed in the next section.
+The literature we are aware of focusses on one or both of two special cases of Eq.~\ref{eq:rt_general}, defined by choice of weight function $W(n, N)$.
+We will also focus on these two variants of RT estimators, but we observe that there is a larger family.
+
+Most related work uses the ``Russian roulette'' estimator originally discovered and named by von Neumann and Ulam \cite{kahn1955use}, which we term \emph{RT-RR} and has the form
+\begin{align}
+W(n, N) = \frac{1}{1 - \sum_{n'=1}^{n-1}q(n')} \mathbbm{1}\{N \geq n\}\,.
+\end{align}
+It can be seen as unrolling and summing the iterates~$\Delta_n$ while flipping a biased coin at each new iterate $\Delta_n$.
+With probability~$q(n)$, the series is truncated at term~$n$ and the unrolling stops.
+With probability~${1 - q(n)}$, the process continues, and all future terms are upweighted by $\frac{1}{1-q(n)}$ to maintain unbiasedness.
+
+The other important special case of Eq.~\ref{eq:rt_general} is the ``single sample'' estimator \emph{RT-SS}, referred to as ``single term weighted truncation'' in \citet{lyne2015russian}.
+RT-SS takes
+\begin{align}
+W(n, N) &= \frac{1}{q(N)} \mathbbm{1} \{n = N\}\,.
+\end{align}
+This is directly importance sampling the differences~$\Delta_n$.
+
+We will later prove conditions under which RT-SS and RT-RR should be preferred.
+Of all estimators in the form of (\ref{eq:rt_general}) which obey proposition \ref{prop:unbiased} and for all $q$, RT-SS minimizes the worst-case variance across an adversarial choice of diagonal covariances $\Cov(\Delta_i, \Delta_j)$.
+Within the same family, RT-RR achieves minimum variance when $\Delta_i$ and $\Delta_j$ are independent for all $i, j$.
+
+\subsection{A brief history of unbiased randomized truncation}
+\label{sec:history}
+The essential trick---unbiased estimation of a quantity via randomized truncation of a series---dates back to unpublished work from John von Neumann and Stanislaw Ulam.
+They are credited for using it to develop a Monte Carlo method for matrix inversion in \citet{forsythe1950matrix}, and for a method for particle diffusion in \citet{kahn1955use}.
+
+It has been applied and rediscovered in a number of fields and applications.
+The early work from von Neumann and Ulam led to its use in computational physics, in neutron transport problems \citep{spanier1969monte}, for studying lattice fermions \citep{kuti1982stochastic}, and to estimate functional integrals \citep{wagner1987unbiased}.
+In computer graphics \citet{arvo1990particle} introduced its use for ray tracing; it is now widely used in rendering software.
+In statistical estimation, it has been used for estimation of derivatives \citep{rychlik1990unbiased}, unbiased kernel density estimation \citep{rychlik1995class}, doubly-intractable Bayesian posterior distributions \citep{girolami2013playing, lyne2015russian, wei2016markov}, and unbiased MCMC \citep{jacob2017unbiased}.
+
+The underlying trick has been rediscovered by \citet{fearnhead2008particle} for unbiased estimation in particle filtering, by \citet{mcleish2010general} for debiasing Monte Carlo estimates, by \citet{rhee2012new, rhee2015unbiased} for unbiased estimation in stochastic differential equations,
+and by \citet{tallec2017unbiasing} to debias truncated backpropagation.
+The latter also uses RT estimators for optimization; however, it only considers fixed ``Russian roulette''-style randomized telescope estimators and does not consider convergence rates or how to adapt the estimator online (our main contributions).

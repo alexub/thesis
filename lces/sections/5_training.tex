@@ -1,0 +1,70 @@
+\vspace{-0.1cm}\section{Data and training}\label{sec:training}\vspace{-0.1cm}
+Data collection has two phases.
+First, we collect training and validation datasets using Hamiltonian Monte Carlo \citep{duane1987hybrid} to preferentially sample displacements which correspond to lower energy modes.
+Next, we perform dataset aggregation \citep{ross2011reduction} to augment the dataset so that the surrogate will be accurate
+on states encountered when deployed.
+We provide details of the hardware and the software packages used in the appendix.
+
+\textbf{Solving the PDE}.
+To collect training data, we use the reduced-basis displacement $\tilde{u}$ corresponding to a vector of spline coefficients $\rvu$ as the boundary condition around a domain $\Omega$ representing a $2\times2$-pore subdomain, and solve the PDE using a load-stepped relaxed Newton's method \citep{sheng2002automatic}. The relaxed Newton's method takes the iteration~${\vec{u} \leftarrow \vec{u} - \lambda
+(\frac{\partial^2 E}{\partial \vec{u}^2})^{-1}\frac{\partial E}{\partial \vec{u}}}$.
+Here, $0 < \lambda < 1$ is the relaxation parameter (analogous to a step size), and $\vec{u}$ is the vector of coefficients defining $u$ in the FEA basis.
+Newton's method requires an initial guess which is sufficiently close to the true solution \citep{kythe2004introduction}.
+Smaller relaxation parameters yield a greater radius of convergence but necessitate more steps to solve the PDE.
+
+The radius of convergence can also be aided by load-stepping: solving the PDE for a sequence of boundary conditions, annealing from an initial boundary condition for which we have a good initial guess (e.g., the rest configuration) to a final boundary condition~$\tilde{u}$, using the solution to the previous problem as an initial guess for Newton's method for the next problem.
+We find that combining load stepping with a relaxed Newton's method is more efficient than using either alone.
+Except where specified, we linearly anneal from rest to~$\tilde{u}$ over~$10$ load steps and use a relaxation parameter~$\lambda = 0.1$.
+
+\textbf{Initial dataset collection}.
+We wish to train on varied displacement boundary conditions. As solution procedures minimize energy, lower energy modes will be encountered in the solve. We choose a distribution with density the product of a Boltzmann density~$\exp \{\tilde{E}\}/Z$ and a Gaussian density~$\mathcal{N}(\bar{x}(\rvu); \bar{\mu}, \Sigma)$, where~${\bar{x}(\rvu) \in \mathbb{R}^{2\times2}}$ is a macroscopic strain tensor\footnote{See the appendix for approximating $\bar{x}$ from $\rvu$.} corresponding to $\rvu$,
+$\bar{\mu}$ is a target strain drawn from an i.i.d.\ Gaussian with standard deviation~$0.15$, and~$\Sigma$ is set to~$(\bar{\mu}\circ \bar{\mu})^{-1}$.
+%We approximate the macroscopic strain tensor as\\
+%\resizebox{\linewidth}{!}{
+%  \begin{minipage}{\linewidth}
+%\begin{align*}
+%\bar{x}(\rvu) = \frac{1}{N} \begin{bmatrix}
+%\displaystyle\sum_{X \in \text{rhs}} \!\!u_1(X) \!-\!\!\! \sum_{X \in \text{lhs}} \!\!u_1(x)
+%&
+%\displaystyle\sum_{X \in \text{rhs}} \!\!u_2(X) \!-\!\!\! \sum_{X \in \text{lhs}} \!\!u_2(X)
+%\\
+%\displaystyle\sum_{X \in \text{top}} \!\!u_1(X) \!-\!\!\! \sum_{X \in \text{bot}} \!\!u_1(x)
+%&
+%\displaystyle\sum_{X \in \text{top}} \!\!u_2(X) \!-\!\!\! \sum_{X \in \text{bot}} \!\!u_2(X)
+%\end{bmatrix}
+%\end{align*}
+%\end{minipage}
+%}
+% Above,~$u_1(X)$ and~$u_2(X)$ are horizontal and vertical displacements defined by $\rvu$ at a point $X$, and top, bot, lhs and rhs are the set of control point locations for the splines on the top, bottom, left and right of the component.
+
+Given a solution to the PDE, the log-density and its displacement may be cheaply computed (the latter via the adjoint method). Making use of these gradients, we sample data points with Hamiltonian Monte Carlo (HMC). After sampling a data point, we compute the corresponding Hessian and save the tuple $(\rvu, \xi, \tilde{E}, \nabla_{\rvu} \tilde{E}, \nabla^2_{\rvu} \tilde{E})$ as a data point.
+
+We initialize each HMC data collector by sampling a macroscopic displacement target and a random pore shape. We do not use load-stepping, instead using the solution for the $\rvu$ used in the previous iteration of HMC's leapfrog integration as an initial guess for solving the PDE. We randomize HMC hyperparameters for each collector to attempt to minimize the impact of specific settings: see the appendix for exact ranges. We sample 55000 training examples and 5000 validation examples altogether. We visualize displacements drawn from this distribution in the appendix.%---in effect, we are sampling hierarchically from a mixture of distributions. The parameter range is chosen such that solving the PDE at each leapfrog step converges in reasonable time. We draw a temperature to scale the log-density from $\mathcal{U}([0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1])$, a standard deviation from which to draw an initial Gaussian potential from $\mathcal{U}(0.01, 0.3)$, and a leapfrog integration path length from $\mathcal{U}(0.005, 0.02)$ and step size from $\mathcal{U}(0.05, 0.3)$.
+
+\textbf{Data aggregation}.
+Surrogate deployment defies standard i.i.d.\ assumptions in supervised learning.
+The deployed surrogate encounters states determined by the energy it defines and by boundary conditions on the composed body. Given a dataset such as that we sampled with HMC, the distribution over states encountered by the surrogate in deployment may be very different to the distribution of states in this dataset.
+
+This problem---that training an agent to predict expert actions can lead to trajectories dissimilar to those on which it was trained---is a central concern in the imitation learning literature. A number of solutions exist \citep{schroecker2017state}.
+One is dataset aggregation, or \textsc{DAgger} \citep{ross2011reduction}, which reduces imitation learning or structured prediction to online learning.
+
+In \textsc{DAgger}, a policy is deployed and trajectories are collected.
+The expert is queried on the states in these trajectories.
+The state-action pairs are appended to the dataset, and the policy is retrained on this dataset.
+This process of deployment, querying, appending data, and retraining, is iterated.
+The distribution of states encountered in deployment and the distribution of states in the dataset converge. 
+Under appropriate assumptions, the instantaneous regret of the learned policy vanishes with the number of iterations, i.e., the learned policy matches the expert policy on its own trajectories.
+
+\citet{ross2011reduction} present \textsc{DAgger} as a method for discrete action spaces.
+We have a continuous action space: the gradient of the energy in a cell.
+We do not investigate generalizing \textsc{DAgger}'s regret guarantees to continuous action spaces, but the intuition holds that we wish our model to ``imitate'' the finite element ``expert'' on the optimization trajectories the model produces.
+
+We initialize our training data with HMC as described earlier.
+We then apply \textsc{DAgger} by iterating: (i) training the surrogate; (ii) composing surrogates and finding displacements which minimize the composed energy; (iii) sampling displacements along the surrogate's solution path, querying the ground-truth energy and energy derivatives using FEA, and adding these new data points to the dataset.
+We visualize displacements generated by \textsc{DAgger} in the appendix.
+%\vspace{-0.3cm}
+\section{Software and hardware}
+We implement the finite element models in~\texttt{dolfin}~\citep{logg2010dolfin, logg2012dolfin}, a Python front end to FEniCS \citep{alnaes2015fenics,logg2012automated}. To differentiate through finite element solutions, we use the package~\texttt{dolfin-adjoint}~\citep{mitusch2019dolfin}. We implement surrogate models in PyTorch \citep{paszke2019pytorch}.
+
+We use Ray \citep{moritz2018ray} to run distributed workloads on Amazon EC2. The initial dataset is collected using 80 M4.xlarge CPU spot workers. While training the surrogate, we use a GPU P3.large driver node to train the model, and 80 M4.xlarge CPU spot worker nodes performing \textsc{DAgger} in parallel. These workers receive updated surrogate model parameters, compose and deploy the surrogate, sample displacements along the solution path, query the finite element model for energy and derivatives, and return data to the driver node. Initial dataset collection and model training with \textsc{DAgger} each take about one day in wall-clock time.
+%\vspace{-0.3cm}

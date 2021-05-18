@@ -1,0 +1,38 @@
+\section{Practical implementation}
+\subsection{Tuning the estimator}
+We estimate the expected squared distances
+$\mathbb{E}[||\bar{G}_i - \bar{G}_j||_2^2]$ by
+maintaining exponential moving averages. We keep track of the computational
+budget $B$ used so far by the RT estimator, and "tune" the estimator
+every $K \bar{C}(\bar{H})$ units of computation, where
+$\bar{C}(\bar{H})$ is the compute required to
+evaluate $\bar{G}_{\bar{H}}$, and $K$ is a "tuning frequency" hyperparameter.
+During tuning, the gradients $G_i$ are computed, the squared norms
+$||\bar{G}_i - \bar{G}_j||_2^2$ are computed, and the exponential moving averages
+are updated. At the end of tuning, the estimator is updated using the
+expected squared norms; i.e. a subsequence is selected, $q$ is set according
+to section 5.2 with choice of RT-RR or RT-SS left as a hyperparameter, and
+the learning rate is adapted according to section 5.1
+
+\subsection{Controlling sequence length}
+Tuning and subsequence selection require computation. Consider using RT
+to optimize an objective with an inner loop of size $M$.
+If we let $\bar{G}_i$
+be the gradient of the loss after $i$ inner steps,
+we must maintain $M^2 - M$ exponential moving
+averages $\mathbb{E}||\bar{G}_i - \bar{G}_j||_2^2$, and
+compute $M$ gradients $\bar{G}_i$ each time we tune the estimator.
+The computational cost of the tuning step under this
+scheme is $\mathcal{O}(M^2)$.
+This is unacceptable if we wish our method to scale well
+with the size of loops we might wish to optimize.
+
+To circumvent this, we choose base subsequences such that
+$\bar{C}_i \propto 2^i$. This ensures that
+$\bar{H} = \mathcal{O}(\log_2 M)$, where $M$ is the maximum number of steps we
+wish to unroll. We must maintain $\mathcal{O} (\log_2^2 M)$ exponential moving
+averages. Computing the gradients $\bar{G}_i$ during each tuning step
+requires compute $C_{\text{tune}} = \sum_{i=1}^{\bar{H}} k * 2^i$. Noting
+that $\bar{C}_{\bar{H}} = k * 2^{\bar{H}}$ and that
+$\sum_{i=1}^N 2^i < 2^{N+1} \forall N$ yields
+$C_{\text{tune}} < 2 \bar{C}_{\bar{H}} = 2 M$.

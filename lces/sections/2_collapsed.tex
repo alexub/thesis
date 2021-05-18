@@ -1,0 +1,43 @@
+\section{Learning to optimize in collapsed bases}
+\label{sec:collapsed}
+Solving PDEs like those that govern meta-material behavior involves finding a solution~$u$ which minimizes an energy~$E(u)$ subject to constraints.
+For mechanical meta-materials, $E(u)$ is the stored elastic potential energy in the material.
+We propose a framework for amortizing high-dimensional optimization problems where the objective has special conditional independence structure, such as that found in solving these PDEs. Consider the general problem of solving
+\small\begin{equation}\label{eq:minimization}
+u^* = \argmin E(u)\,.
+\end{equation}\normalsize
+~$u$ may be a vector in~$\mathbb{R}^d$ or may belong to a richer space of functions.
+Often we are interested in a subset of the vector~$u^*$, or the values the function~$u^*$ takes on a small subdomain.
+To reflect this, view the solution space as the Cartesian product of a space of primary interest and a ``nuisance'' space.
+Denote the solutions as concatenations~${u=[x,y]}$ where~$y$ is the object of interest, and~$x$ is the object whose value is not of interest to an application.
+~$x$ is roughly similar to auxiliary variables that appear in probabilistic models, but are marginalized away or discarded from the simulation.
+We use this decomposition to frame Eq.~\ref{eq:minimization} as a bi-level optimization problem:
+\begin{equation}\label{eq:bilevel}\small
+y^* = \argmin_y \min_x E(x, y)\,.
+\end{equation}
+Consider the \emph{collapsed objective},~${\tilde{E}(y) = \min_x E(x, y)}$.
+If~$\tilde{E}(y)$ can be queried without representing~$x$, we may perform \emph{collapsed optimization} in the reduced basis of~$y$,
+avoiding optimization in the larger basis of~$u$ (Eq. \ref{eq:minimization}), or performing bi-level optimization (Eq. \ref{eq:bilevel}). However, ~$\tilde{E}$ is not usually available in closed form.
+We consider approximating~$\tilde{E}(y)$ via supervised learning.
+In general, this would require solving~${\tilde{E} = \min_x E(x, y)}$ for each example~$y$ we wish to include in our training set.
+This is the procedure used by many surrogate-based optimization techniques \citep{queipo2005surrogate,forrester2009recent,shahriari2015taking}.
+The high cost of gathering each training example makes this prohibitive when~$x$ is high dimensional (and minimization is difficult) or when~$y$ is high dimensional (and supervised learning requires many examples). Compositional structure in~$E$ may assist us with approximating~$\tilde{E}$.
+Many objectives may be represented as a sum:
+\begin{equation}\label{eq:sum}\small
+    E(x, y) = \sum_i E_i(x_i, y)\,.
+\end{equation}
+Given this decomposition,~$x_i$ and~$x_j$ are conditionally independent given~$y$; i.e., if we constrain~$x_i$ and~$y$ to take some values and perform minimization, the  resulting $x_j$ or $E_j(x_j, y)$ do not vary with the value chosen for $x_i$.
+This follows from the partial derivative structure~${\frac{\partial{E_i}}{\partial x_j} = 0}$ for~${i\neq j}$.
+
+We propose to \emph{learn} a collapsed objective $\tilde{E}$, which exploits conditional independence structure by representing~${\tilde{E}(y) = \sum_i \tilde{E}_i(y)}$.
+This representation as a sum allows us to use~${\min_{x_i} E_i(x_i, y)}$ as targets for supervision, which may be found more cheaply than performing a full minimization.
+The learned approximations to~$\tilde{E}_i$ may be composed to form an energy function with larger domain.
+
+The language we use to describe this decomposition is chosen to reflect the conceptual similarity of our framework to \emph{collapsed variational inference} \citep{teh2007collapsed} and \emph{collapsed Gibbs sampling} \citep{geman1984stochastic, liu1994collapsed}, in which conditional independence allows optimization or sampling to proceed in a collapsed space where nuisance random variables are marginalized out of the relevant densities.
+We exploit similar structure to these techniques, albeit in a deterministic setting.
+Other approaches to accelerating Eq.~\ref{eq:bilevel} which do not exploit (\ref{eq:sum}) or directly model~$\tilde{E}(y)$ include amortizing the inner optimization by predicting~${x^*(y) = \argmin_x E(x, y)}$ \citep{kingma2013auto,brock2017smash}, or truncation of the inner loop, either deterministic \citep{wu2018understanding,shaban2018truncated} or randomized to reduce bias \citep{tallec2017unbiasing,beatson2019efficient}.
+
+The optimization procedure we accelerate is the simulation of mechanical materials, where the objective corresponds to a physically meaningful energy, and the conditional independence structure arises from spatial decomposition of the domain and spatial locality of the energy density.
+We believe this spatial decomposition of domain and energy could be generalized to learn collapsed energies for solving many other PDEs in reduced bases.
+This collapsed-basis approach may also be applicable to other bi-level optimization problems where the objective decomposes as a sum of local terms.
+\vspace{-0.1cm}

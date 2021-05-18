@@ -1,0 +1,401 @@
+\section{Algorithm pseudocode}
+\begin{algorithm}[H]
+   \caption{Optimization with randomized telescopes}
+   \label{alg:opt}
+\begin{algorithmic}
+   \STATE {\bfseries Input:} initial parameter $\theta$,
+   gradient routine $g(\theta, i)$ which returns $\bar{G}_i(\theta)$,
+   compute costs $\bar{C}$,
+   exponential decay $\alpha$, tuning frequency $K$, horizon $\bar{H}$,
+   reference learning rate $\bar{\eta}$
+   \STATE Initialize $B = 0$, next\_tune$ = 0$, $D_{i, j} = 0$
+   \REPEAT
+   \IF{next\_tune$ <= B$}
+   \STATE $\bar{D}, q, W, S \leftarrow \text{tune}(
+   \theta, \bar{D}, g, \bar{C}, \alpha, \bar{H})$
+   \STATE expectedCompute, expectedSquaredNorm = compute\_and\_variance$(\bar{D}, \bar{C}, S)$
+   \STATE $\eta \leftarrow \bar{\eta} \frac{\text{expectedSquaredNorm}}{\bar{D}_{0, \bar{H}}}$
+   \STATE $B += \sum_{i=1}^{\bar{H}} \bar{C}({\bar{H}})$
+   \STATE next\_tune $+= \bar{C}({\bar{H}})$
+   \ENDIF
+   \STATE $N \sim q$
+   \FOR{$n=1$ {\bfseries to} $N$}
+   \STATE $G_n \leftarrow g(\theta, S[n])$
+   \ENDFOR
+   \STATE $\hat{G} \leftarrow \sum_{n=1}^N G_n W(n, N)$
+   \STATE $\theta \leftarrow \theta - \eta \hat{G}$
+   \IF{compute reused}
+   \STATE $B += \bar{C}({S[N]})$
+   \ELSE
+   \STATE $B += \sum_{n=1}^N \bar{C}({S[n]})$
+   \ENDIF
+   \UNTIL{converged}
+\end{algorithmic}
+\end{algorithm}
+
+
+\begin{algorithm}[H]
+   \caption{tune}
+   \label{alg:tune}
+\begin{algorithmic}
+   \STATE {\bfseries Input:} current parameter $\theta$,
+   current squared distance estimates $\bar{D}_{i,j}$,
+   gradient routine $g(\theta, i)$ which returns $\bar{G}_i(\theta)$,
+   compute costs $\bar{C}$,
+   exponential decay $\alpha$, horizon $\bar{H}$
+   \STATE $\bar{G}_0(\theta) \leftarrow 0$
+   \FOR{$i=1$ {\bfseries to} $\bar{H}$}
+   \STATE $\bar{G}_i(\theta) \leftarrow g(\theta, i)$
+   \ENDFOR
+   \FOR{$i=0$ {\bfseries to} $\bar{H}$}
+   \FOR{$j=1$ {\bfseries to} $\bar{H}$}
+   \STATE $D_{i, j} \leftarrow ||G_i - G_j||_2^2$
+   \ENDFOR
+   \ENDFOR
+   \STATE $\bar{D} \leftarrow \alpha \bar{D} + (1 - \alpha) D$
+   \STATE $S \leftarrow \text{greedy\_subsequence\_select}(\bar{D}, \bar{C})$
+   \STATE $q, W \leftarrow \text{$q$\_and\_$W$}(\bar{D}, \bar{C}, S)$
+   \STATE {\bfseries Return:} updated estimates $\bar{D}_{i,j}$,
+   sampling distribution $q$, weight function $W$, and subsequence $S$
+\end{algorithmic}
+\end{algorithm}
+
+
+\begin{algorithm}[H]
+   \caption{greedy\_subsequence\_select}
+   \label{alg:greedy}
+\begin{algorithmic}
+   \STATE {\bfseries Input:} Norm estimates $\bar{D}$, compute costs $\bar{C}$
+   \STATE Initialize $N = \text{len}(C)$
+   \STATE Initialize $S^+ = [N]$, $S^{-} = [1, ..., N]$,
+   converged$ = $FALSE, bestAddCost$ = $cost$(\bar{D}, S^+, \bar{C})$,
+   bestRemoveCost$ = $cost$(\bar{D}, S^-, \bar{C})$
+   \WHILE{not converged}
+   \STATE
+   \FOR{$i \in [i $ for $ i \in [1 ... N]$ if not $i \in S^+]$}
+   \STATE trial$S \leftarrow $sort$(S^+ + [i])$
+   \STATE trialCost$ \leftarrow $cost$(\bar{D}, \bar{C}, $trial$S)$
+   \IF{trialCost < bestAddCost}
+   \STATE $S^+ \leftarrow $trial$S$
+   \STATE bestAddCost$ \leftarrow $trialCost
+   \STATE converged $\leftarrow$ False
+   \STATE BREAK
+   \ELSE
+   \STATE converged $\leftarrow$ True
+   \ENDIF
+   \ENDFOR
+   \ENDWHILE
+   \STATE converged $\leftarrow$ False
+   \WHILE{not converged}
+   \FOR{$i \in [i $ for $ i \in S^- $ if$ i \neq N$}
+   \STATE trial$S \leftarrow [j $ for $ j \in S^- $if$ j != i]$
+   \STATE trialCost$ \leftarrow $sequence\_cost$(\bar{D}, C, trial$S$)$
+   \IF{trialCost $<$ bestRemoveCost}
+   \STATE $S^- \leftarrow $trial$S$
+   \STATE bestRemoveCost$ \leftarrow $trialCost
+   \STATE converged $\leftarrow$ False
+   \STATE BREAK
+   \ELSE
+   \STATE converged $\leftarrow$ True
+   \ENDIF
+   \ENDFOR
+   \ENDWHILE
+   \IF{bestRemoveCost$ > $ bestAddCost}
+   \STATE {\bfseries Return:} $S^-$
+   \ELSE
+   \STATE {\bfseries Return:} $S^+$
+   \ENDIF
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+   \caption{compute\_and\_variance}
+   \label{alg:cv}
+\begin{algorithmic}
+   \STATE {\bfseries Input:} Norm estimates $\bar{D}$, compute costs $\bar{C}$, sequence $S$
+   \STATE $q$, $W$ $\leftarrow q$\_and\_$W(\bar{D}, \bar{C}, S)$
+   \STATE expectedCompute $\leftarrow \sum_{i \in [1 ... |S|]} q(S[i]]) \bar{C}(S[i])$
+   \IF{RT-SS}
+   \STATE expectedSquaredNorm $\leftarrow \sum_{i \in [1 ... |S|]} q(S[i]]) W(S[i], S[i]) \bar{D}_{S[i-1], S[i]}$
+   \ELSIF{RT-RR}
+   \STATE expectedSquaredNorm $\leftarrow \sum_{i \in [1 ... |S|]} \sum_{j \in [1 ... i]} q(S[i]]) W(S[j], S[i]) \bar{D}_{S[j], S[i]}$
+   \ELSE
+   \STATE Undefined: must specify RT-SS or RT-RR
+   \ENDIF
+   \STATE {\bfseries Return:} expectedCompute, expectedSquaredNorm
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+   \caption{sequence\_cost}
+   \label{alg:cost}
+\begin{algorithmic}
+   \STATE {\bfseries Input:} Norm estimates $\bar{D}$, compute costs $\bar{C}$, sequence $S$
+   \STATE expectedCompute, expectedSquaredNorm = compute\_and\_variance$(\bar{D}, \bar{C}, S)$
+   \STATE {\bfseries Return:} expectedCompute * expectedSquaredNorm
+\end{algorithmic}
+\end{algorithm}
+
+
+\begin{algorithm}[H]
+   \caption{$q$\_and\_$W$}
+   \label{alg:qandw}
+\begin{algorithmic}
+   \STATE {\bfseries Input:} $\bar{D}$, $\bar{C}$, and $S$
+   \IF{RT-SS}
+   \STATE $q(N) \leftarrow \sqrt{\frac{\bar{D}_{S[N], S[N-1]}}{\bar{C}(S[n])}}$
+   \STATE $W(n, N) \leftarrow \frac{1}{q(N)} \mathds{1}\{n=N\}$
+   \ELSIF{RT-RR}
+   \STATE $\tilde{Q}(N) \leftarrow \sqrt{\frac{\bar{D}_{S[N], S[N-1]}}{\bar{C}(S[n]) - \bar{C}(S[n-1])}}$
+   \STATE $\tilde(q)(N) \leftarrow $max$(0, \tilde{Q}(N) - \tilde{Q}(N-1))$
+   \STATE $q(N) \leftarrow \frac{\tilde{q}(N)}{\sum_i \tilde{q}(i)}$
+   \STATE $W(n, N) \leftarrow \frac{1}{1 - \sum_i q(i)} \mathds{1}\{n \leq N\}$
+   \ELSE
+   \STATE Undefined: must specify RT-SS or RT-RR
+   \ENDIF
+   \STATE {\bfseries Return:} $q$, $W$
+\end{algorithmic}
+\end{algorithm}
+\clearpage
+\section{Proofs}
+
+\subsection{Proofs for section 2}
+\subsubsection{Proposition \ref{prop:unbiased}}
+\textbf{Unbiasedness of RT estimators.}
+The RT estimators in (\ref{eq:rt_general}) are unbiased estimators of
+$Y_H$ as long as
+\begin{align*}
+\mathbb{E}_{N\sim q} [W(n, N) \mathds{1}\{N \geq n\}] = \sum_{N=n}^H W(n, N)q(N) = 1 \quad \forall n\,.
+\end{align*}
+
+\begin{proof}
+A randomized telescope estimator which satisfies the above linear constraint condition has expectation:
+\begin{align*}
+\mathbb{E} [\hat{Y}_H] &= \sum_{N=1}^H q(N) \sum_{n=1}^N W(n, N) \Delta_n\\
+&= \sum_{n=1}^H \sum_{N=1}^H \Delta_n W(n, N) q(N)\mathds{1}\{n \leq N\}\\
+&= \sum_{n=1}^H \Delta_n \sum_{N=n}^H W(n, N) q(N) = \sum_{n=1}^H \Delta_n = Y_H
+\end{align*}
+\end{proof}
+
+\subsection{Proofs for section 4}
+
+\subsubsection{Theorem \ref{thm:poly}}
+\textbf{Bounded variance and compute with polynomial convergence of $\psi$}.
+Assume~$\psi$ converges according to~$\psi_n \leq \frac{c}{(n)^p}$ or faster, for constants ${p > 0}$ and~$c > 0$.
+Choose the RT-SS estimator with ${q(n) \propto 1/((n)^{p + 1/2})}$.
+The resulting estimator~$\hat{G}$ achieves expected compute~${C \leq (\mathcal{H}_{H}^{p-\frac{1}{2}})^2}$, where~$\mathcal{H}_H^i$ is the~$H$th generalized harmonic number of order~$i$, and expected squared norm~${\mathbb{E}[ ||\hat{G}||_2^2 ] \leq c_{\psi}^2 (\mathcal{H}_H^{p-\frac{1}{2}})^2 := \tilde{G}^2}$.
+The limit~${\lim_{H \to \infty} \mathcal{H}_H^{p - \frac{1}{2}}}$ is finite iff~${p > \frac{3}{2}}$, in which case it is given by the Riemannian zeta function,~${\lim_{H \to \infty} \mathcal{H}_H^{p - \frac{1}{2}} = \zeta(p - \frac{1}{2})}$.
+Accordingly, the estimator achieves horizon-agnostic variance and expected compute bounds iff~${p > \frac{3}{2}}$.
+\begin{proof}
+Begin by noting the RT-SS estimator returns $\frac{\Delta_n}{q_n}$ with probability $q(n)$.
+Let $\bar{q}(n) = \frac{1}{n^{p + \frac{1}{2}}}$ and
+$\sum_{n=1}^H \bar{q}(n) = Z$, such that
+$q(n) = \frac{\bar{q}(n)}{Z}$. First, note
+$Z = \sum_{n=1}^H \frac{1}{n^{p+\frac{1}{2}}} = \text{H}_{H}^{p+\frac{1}{2}}$.
+Now inspect the expected squared norm
+$\mathbb{E}||\hat{G}||_2^2$:
+\begin{align*}
+\sum_{n=1}^H q(n) ||\frac{\Delta_n}{q_n}||_2^2 &=
+\sum_{n=1}^H q(n) \frac{||\Delta_n||_2^2}{q_n^2} \\
+&= Z \sum_{n=1}^H \bar{q}(n) \frac{||\Delta_n||_2^2}{\bar{q}_n^2}\\
+&\leq Z c_\psi^2 \sum_{n=1}^H \bar{q}(n) \frac{n^{2p+1}}{n^{2p}}\\
+&= Z c_\psi^2 \sum_{n=1}^H \frac{n^{2p+1}}{n^{3p+\frac{1}{2}}}\\
+&= Z c_\psi^2 \sum_{n=1}^H \frac{1}{n^{p-\frac{1}{2}}}\\
+&= Z c_\psi^2 \text{H}_H^{p-\frac{1}{2}}\\
+&= c_\psi^2 \text{H}_H^{p-\frac{1}{2}} \text{H}_H^{p+\frac{1}{2}}\\
+&\leq c_\psi^2 (\text{H}_H^{p-\frac{1}{2}})^2
+\end{align*}
+Now inspect the expected compute, $\mathbb{E}_{n\sim q} n$:
+\begin{align*}
+\mathbb{E}_{n\sim q} &= \sum_{n=1}^N q(n) n\\
+&= Z \sum_{n=1}^H \frac{n}{n^{p+\frac{1}{2}}}\\
+&= Z \sum_{n=1}^H \frac{1}{n^{p-\frac{1}{2}}}\\
+&= Z \text{H}_H^{p-\frac{1}{2}}\\
+&= \text{H}_H^{p-\frac{1}{2}} \text{H}_H^{p+\frac{1}{2}}\\
+&\leq (\text{H}_H^{p-\frac{1}{2}})^2
+\end{align*}
+\end{proof}
+
+\subsubsection{Theorem \ref{thm:geom}}
+\textbf{Bounded variance and compute with geometric convergence of $\psi$}.
+Assume~$\psi_n$ converges according to~${\psi_n \leq c p^n}$, or faster, for~${0 < p < 1}$.
+Choose RT-SS and with~${q(n) \propto p^n}$.
+The resulting estimator ~$\hat{G}$ achieves expected compute~${C \leq (1-p)^{-2}}$ and expected squared norm~${||\hat{G}||_2^2 \leq \frac{c}{(1-p)^2} := \tilde{G}^2}$.
+Thus, the estimator achieves horizon-agnostic variance and expected compute bounds for all~${0 < p < 1}$.
+\begin{proof}
+Let $q(n) = \frac{\bar{q}(n)}{Z}$, for $\bar{q}(n) = p^n$.
+Note $Z = \sum_{n=1}^H p^n = p \frac{1 - p^H}{1 - p} \leq \frac{1}{1 - p}$.
+Now, note $\psi_n = c_\psi \bar{q}(n)$. It follows
+\begin{align*}
+\mathbb{E}_{n\sim q} ||\frac{\Delta_n}{q(n)}||_2^2
+&= \sum_{n=1}^H q(n) \frac{||\Delta_n||_2^2}{q(n)^2} \\
+&\leq\sum_{n=1}^H q(n) \frac{\psi_n^2}{q(n)^2} \\
+&=\leq c_\psi^2 \sum_{n=1}^H q(n) \frac{\bar{q}(n)^2}{q(n)^2}\\
+&= c_\psi^2 Z^2 \sum_{n=1}^H q(n)\\
+&= c_\psi^2 Z^2
+\end{align*}
+Now consider the expected compute. We have
+\begin{align*}
+\mathbb{E}_{n\sim q} n &= \sum_{n=1}^N n q(n)\\
+&= \sum_{n=1}^N \frac{n p^n}{Z}\\
+&= \frac{1}{Z} \sum_{n=1}^N n p^n\\
+&= p \frac{1}{Z} \frac{1 + Hp^{H+1} - (H+1)p^H}{(1-p)^2}\\
+&= \frac{1 + Hp^{H+1} - (H+1)p^H}{(1-p)(1-p^H)}\\
+&\leq \frac{1}{(1-p)(1-p^H)}\\
+&\leq \frac{1}{(1-p)^2}
+\end{align*}
+\end{proof}
+
+\subsubsection{Theorem \ref{thm:infopt}}
+\textbf{Asymptotic regret bounds for optimizing infinite-horizon programs}.
+Assume the setting from \ref{thm:poly} or \ref{thm:geom}, and the corresponding~$C$ and~$\tilde{G}$ from those theorems.
+Let~$R_t$ be the instantaneous regret at the~$t$th step of optimization,~${R_t = \mathcal{L}(\theta_t) - \min_\theta \mathcal{L} (\theta)}$.
+Let~$t(B)$ be the greatest~$t$ such that a computational budget~$B$ is not exceeded.
+Use online gradient descent with step size~${\eta_t = \frac{D}{\sqrt{t} \mathbb{E}[||\hat{G}||_2^2]}}$.
+As~${B \to \infty}$, the asymptotic instantaneous regret is bounded by~${R_{t(B)} \leq \mathcal{O} (\tilde{G} D \sqrt{\frac{C}{B}})}$, independent of~$H$.
+\begin{proof}
+First, we control $t(B)$ using the central limit theorem.
+Note $t \to \infty \iff B(t) \to \infty$. Consider $B$ as a function $B(t)$
+of $t$. We have $B(t) = \sum_{\tau=1}^t N_t$, where $N \sim q$. Thus,
+$\frac{B(t)}{t} \to \mathbb{E}_{N \sim q} N$ by the central limit theorem. This
+implies that in the limit, $t = \frac{B}{C}$.
+
+To complete the proof, plug in $t(B)$ and $\eta_t$, as well as the upper bound
+on squared norm $\mathbb{E}||\hat{G}||_2^2 \leq \tilde{G}^2$ and upper bound
+on diameter $D$, into standard results for stochastic gradient descent with
+convex loss functions (e.g. section 3.4 in \cite{hazan2016introduction})
+\end{proof}
+
+\subsection{Proofs for section 5}
+
+\subsubsection{Theorem \ref{thm:advcorr-w}}
+\textbf{Optimality of RT-SS under adversarial correlation.}
+Consider the family of estimators presented in Equation  \ref{eq:rt_general}.
+Assume $\theta$, $\nabla_\theta$, and $G$ are univariate.
+For any fixed sampling distribution $q$, the single-sample RT estimator RT-SS minimizes the worst-case variance of $\hat{G}$ across an adversarial choice of covariances~${\Cov(\Delta_i, \Delta_j) \leq \sqrt{\Var(\Delta_i)} \sqrt{\Var(\Delta_j)}}$.
+
+\begin{proof}
+Recall $\hat{G} = \sum_{n=0}^N \Delta_n W(n, N)$. Let $\sigma_{i, j}^2 = \Cov(\Delta_i, \Delta_j)$ and $\sigma_i^2 = \Var(\Delta_i)$. The variance of $\hat{G}$ is:
+\begin{align*}
+\Var(\hat{G}) &= \sum_N q(N) \Big[\sum_{i=0}^N \sum_{j=0}^N W(i, N) W(j, N) \sigma_{i, j}^2 \Big] \\
+&\leq \sum_N q(N) \Big[\sum_{i=0}^N \sum_{j=0}^N W(i, N) W(j, N) \sigma_i \sigma_j \Big] \\
+&= \sum_N q(N) \Big(\sum_{n=0}^N W(n, N) \sigma_n \Big)^2
+\end{align*}
+Note the above bound is tight as the adversary can choose $\Cov(\Delta_i, \Delta_j) = \sigma_i \sigma_j$. Introduce $\rho(n, N) = W(n, N) q(N)$, and note that the constraint from proposition \ref{prop:unbiased} can equivalently be stated as $\sum_{N \geq n} \rho(n, N) = 1 \forall n$. We have the variance:
+\[
+\Var(\hat{G} | N) \leq \sum_N \frac{1}{q(N)} \Big(\sum_{n=0}^N \rho(n, N) \sigma_n \Big)^2
+\]
+Consider finding $\rho(n, N)$ which minimizes the variance for an arbitrary $q$. The constrained optimization has the Lagrangian:
+\[
+J = \Big(\sum_N \frac{1}{q(N)} (\sum_{n=0}^N \rho(n, N) \sigma_n )^2\Big) + \sum_n \lambda_n (\sum_{N \geq n} \rho(n, N) - 1)
+\]
+We can accordingly optimize by taking derivatives:
+\begin{align*}
+    \frac{dJ}{d\rho(n, N)} &= 2C q(N)(\sum_{i=0}^N w(i, N) \sigma_i) \sigma_n + \lambda_n\\
+    \frac{dJ}{d\rho(n, N)} = 0 &\implies \sigma_n q(N) \sum_{i=0}^N w(i, N) \sigma_i = k_n\\
+    &\implies \sigma_n \sum_{i=0}^N \rho(i, N) \sigma_i = k_n \forall N \geq n\\
+    &\implies \rho(n, N) = 0 \forall N > n
+\end{align*}
+\end{proof}
+
+\subsubsection{Theorem \ref{thm:advcorr-q}}
+\textbf{Optimal q under adversarial correlation.}
+Consider the family of estimators presented in Equation  \ref{eq:rt_general}.
+Assume $\Cov(\Delta_i, \Delta_i)$ and $\Cov(\Delta_i, \Delta_j)$ are diagonal.
+The RT-SS estimator with~${q_n \propto \sqrt{\frac{\mathbb{E}[||\Delta_n||_2^2}{C(n)}}}$ maximizes the ROE across an adversarial choice of diagonal covariance matrices~${\Cov(\Delta_i, \Delta_j)_{kk} \leq \sqrt{\Cov(\Delta_i, \Delta_i)_{kk} \Cov(\Delta_j, \Delta_j)_{kk}}}$.
+\begin{proof}
+First, note that by the assumption of diagonal covariance between all terms,
+the expected squared norm decomposes over indices $k$:
+\[
+\mathbb{E} ||\hat{G}||_2^2 = \sum_k \mathbb{E} \hat{G}[k]^2
+\]
+For all choices of $q$, the RT-SS estimator minimizes the worst-case variance and thus
+(due to unbiasedness) the expected squared value of each entry in $\hat{G}$.
+Because the squared norm decomposes, the RT-SS estimator minimizes the squared
+norm for all $q$.
+
+It remains to optimize $q$. We know $\rho(n, N) = 0 \forall N > n$.
+Therefore to satisfy the constraint, we have $\rho(N, N) = 1$.
+It follows that:
+\[
+\text{ROE}^-1 = \big( \sum_N q(N) C(N) \big) \big(\sum_N \frac{\mathbb{E}||\Delta_N||_2^2}{q(N)} \big)
+\]
+We require $\sum_N q(N) = 1$. The constrained optimization has the Lagrangian:
+\[
+J = \Big( \sum_N q(N) C(N) \Big) \Big(\sum_N \frac{\mathbb{E}||\Delta_N||_2^2}{q(N)}\Big) + \lambda (\sum_N q(N) - 1)
+\]
+Let $C = \Big( \sum_N q(N) C(N) \Big)$ and $V = \Big(\sum_N \frac{\mathbb{E}||\Delta_N||_2^2}{q(N)}\Big)$. We optimize $q(N)$ by taking the derivative of the inverse ROE:
+\begin{align*}
+\frac{d\text{ROE}^{-1}}{dq(N)} &= C(N) V - C \frac{\sigma_N^2}{q(N)^2}\\
+\frac{d\text{ROE}^{-1}}{dq(N)} = 0 &\implies q(N)^2 \propto \frac{\mathbb{E}||\Delta_N||_2^2 C}{C(N) V}\\
+&\implies q(N) \propto \sqrt{\frac{\mathbb{E}||\Delta_N||^2_2}{C(N)}}
+\end{align*}
+\end{proof}
+
+\subsubsection{Theorem \ref{thm:nocorr-w}}
+\textbf{Optimality of RT-RR under independence}.
+Consider the family of estimators presented in Eq.~\ref{eq:rt_general}.
+Assume the $\Delta_j$ are univariate.
+When the~$\Delta_j$ are uncorrelated, for any importance sampling distribution~$q$, the Russian roulette estimator achieves the minimum variance in this family and thus maximizes the optimization efficiency lower bound.
+\begin{proof}
+By independence, we have $\mathbb{E}\big(\sum_n W(n, N) \Delta_n \big)^2 = \sum_n W(n, N)^2 \mathbb{E} \Delta_n^2$. It follows that an RT estimator has variance:
+\begin{align*}
+\Var(\hat{G}) &= \sum_N q(N) \sum_{n\leq N} W(n, N)^2 \mathbb{E} \Delta_n^2\\
+&= \sum_N \frac{1}{q(N)} \sum_{n\leq N} \rho(n, N)^2 \mathbb{E} \Delta_n^2
+\end{align*}
+Recall the constraint in proposition \ref{prop:unbiased} requires $\sum_{N \geq n} \rho(n, N) = 1$ for all $n$. The Lagrangian of the constrained minimization of $\Var(\hat{G})$ with respect to $\rho$ is:
+\[
+J = \Var(\hat{G}) + \sum_n \lambda_n (\sum_{N \geq n} \rho_n - 1)
+\]
+We optimize $\rho$ by finding the minimum of the Lagrangian:
+\begin{align*}
+\frac{dJ}{d\rho(n,N)} &= \frac{2}{q(N)} \rho(n, N) \mathbb{E} \Delta_n^2 + \lambda_n \\
+\frac{dJ}{d\rho(n,N)} = 0 &\implies \frac{\rho(n, N)}{q(N)} = -\frac{\lambda_n}{2 \mathbb{E} \Delta_n^2}\\
+&\implies W(n, N) = -\frac{\lambda_n}{2 \mathbb{E} \Delta_n^2}, \text{ which is independent of } N\\
+&\implies W(n, N) = \frac{1}{\sum_{N' \geq n} q(N')} \text{ to fulfill the constraint in proposition }\ref{prop:unbiased}
+\end{align*}
+\end{proof}
+
+\subsubsection{Theorem \ref{thm:nocorr-q}}
+\textbf{Optimal q under independence}.
+Consider the family of estimators presented in Equation  \ref{eq:rt_general}.
+Assume $\Cov(\Delta_i, \Delta_i)$ is diagonal and~$\Delta_i$ and~$\Delta_j$ are independent.
+The RT-RR estimator with
+$Q(i) \propto \sqrt{\frac{\mathbb{E} [||\Delta_i||_2^2}{C(i) - C(i-1)}]}$,
+where $Q(i) = \Pr(n \geq i) = \sum_{j=i}^H q(j)$,
+maximizes the ROE.
+
+\begin{proof}
+First note that by theorem \ref{thm:nocorr-w}, for any $q$ and for each element in the vector
+$\hat{G}$, the RT-RR estimator minimizes the variance of that element. Now note
+that due to independence of $\Delta_i, \Delta_j$ and diagonality of $\Cov(\Delta_i, \Delta_i)$:
+\begin{align*}
+\mathbb{E} ||\sum_{n=1}^N W(n, N) \Delta_n||_2^2 &= \sum_{n=1}^N W(n, N) \mathbb{E} ||\Delta_n||_2^2\\
+&= \sum_k \sum_{n=1}^N W(n, N) \mathbb{E}\Delta_n[k]^2
+&= \sum_k \mathbb{E} \hat{G}[k]^2
+\end{align*}
+As the RT-RR estimator minimizes $\mathbb{E} \hat{G}[k]^2$ for each coordinate $k$,
+it also minimizes $\mathbb{E} ||\hat{G}||_2^2$. It remains to optimize $Q$.
+Consider the inverse ROE of the RT-RR estimator. By independence we have:
+\begin{align*}
+    \text{ROE}(\hat{G})^{-1} = \mathbb{E} ||\hat{G}||_2^2 \mathbb{E} C &=
+    \Big(\sum_N q(N) \sum_{n\leq N} \frac{1}{Q(n)^2} \mathbb{E} ||\Delta_n||_2^2\Big) \Big(\sum_N q(N) C(N)\Big)
+\end{align*}
+Take the gradient of the inverse optimization efficiency lower bound w.r.t. $q(n)$:
+\[
+\frac{d\text{ROE}(\hat{G})^{-1}}{dq(N)} = C(N) \mathbb{E} ||\hat{G}||_2^2 + \sum_{n \leq N} \frac{1}{Q(n)^2} \mathbb{E} ||\Delta_n||_2^2 - \sum_{i} q(i) \sum_{j \leq min(i, N)} \frac{2}{Q(j)^3} \mathbb{E} ||\Delta_j||_2^2\\
+\]
+\begin{align*}
+\sum_{i} q(i) \sum_{j \leq min(i, N)} \frac{2}{Q(j)^3} \mathbb{E} ||\Delta_j||_2^2 &= \sum_{j \leq N} \frac{2}{Q(j)^2} \mathbb{E} ||\Delta_j||_2^2 \frac{\sum_i q(i) \mathds{1}\{i \geq j\}}{Q(j)}\\
+&= \sum_{j \leq N} \frac{2}{Q(j)^2} \mathbb{E} ||\Delta_j||_2^2 \quad \text{ by definition of } Q(j)
+\end{align*}
+\[
+\implies \frac{d\text{ROE}(\hat{G})^{-1}}{dq(N)} = C(N) \mathbb{E} ||\hat{G}||_2^2 - \sum_{n \leq N} \frac{1}{Q(n)^2} \mathbb{E} ||\Delta_n||_2^2
+\]
+Now optimize the objective w.r.t. $Q$ by finding the critical point:
+\begin{align*}
+\frac{d\text{ROE}(\hat{G})^{-1}}{dq(N)} = 0 \implies C(N) \mathbb{E} ||\hat{G}||_2^2 &=  \sum_{n \leq N} \frac{1}{Q(n)^2} \mathbb{E} ||\Delta_n||_2^2\\
+\implies \mathbb{E} ||\hat{G}||_2^2 \Big(C(N) - C(N-1)\Big) &= \frac{1}{2}  \frac{\mathbb{E}||\Delta_N||_2^2}{Q(N)^2}\\
+\implies Q(N)^2 &\propto \frac{\mathbb{E} ||\Delta_n||_2^2}{C(N) - C(N-1)}
+\end{align*}
+\end{proof}

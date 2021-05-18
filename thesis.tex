@@ -1,0 +1,1257 @@
+\documentclass{puthesis}
+
+\RequirePackage[round]{natbib}
+
+\bibliographystyle{plainnat}
+
+% Recommended, but optional, packages for figures and better typesetting:
+\usepackage{microtype}
+\usepackage{graphicx}
+% \usepackage{subfigure}
+\usepackage{booktabs} % for professional tables
+\usepackage{paralist}
+\usepackage{enumitem}
+\usepackage{adjustbox}
+\usepackage{sidecap}
+\usepackage{wrapfig}
+
+\usepackage{caption}
+\usepackage{subcaption}
+% \usepackage[backend=bibtex]{biblatex}
+
+\usepackage[ruled,vlined]{algorithm2e}
+
+\usepackage{import}
+
+\usepackage[utf8]{inputenc} % allow utf-8 input
+\usepackage[T1]{fontenc}    % use 8-bit T1 fonts
+\usepackage{url}
+
+\input{math_commands.tex}
+
+\usepackage{booktabs}       % professional-quality tables
+\usepackage{amsthm}
+\usepackage{amsfonts, amssymb}       % blackboard math symbols
+\usepackage{nicefrac}       % compact symbols for 1/2, etc.
+\usepackage{microtype}      % microtypography
+\usepackage{amsmath}
+\usepackage{bbm}
+\usepackage{bibentry}
+\usepackage{float}
+%\usepackage{algpseudocode}
+%\usepackage{bbm}
+\usepackage{dsfont}
+\usepackage{setspace}
+\usepackage{todonotes}
+\usepackage{wrapfig}
+\usepackage{algorithmic}
+\nobibliography*
+%\usepackage[group-separator={,}]{siunitx}
+
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}{Proposition}[section]
+\newtheorem{corollary}{Corollary}[theorem]
+\newtheorem{lemma}[theorem]{Lemma}
+
+
+\author{Alex Beatson}
+\adviser{Ryan P. Adams}
+\title{Learned surrogates and stochastic gradients for accelerating
+numerical modeling, simulation, and design}
+\abstract{
+Numerical methods, such as discretization-based methods for solving ODEs and PDEs, allow us to model and design complex devices, structures, and systems.
+However, this is often very costly in terms of both computation and the time of the expert who must specify the physical governing equations, the discretization, the solver, and all other aspects
+of the numerical model.
+This thesis presents work using deep learning and stochastic gradient estimation to
+speed up numerical modeling procedures.
+
+In the first chapter we provide a broad introudction to numerical modeling,
+discuss the motivation for using machine learning (and other approximate methods)
+to speed it up, and discuss a few of the many methods which have been
+developed to do so.
+
+In chapter 2 we present composable energy surrogates, in which neural surrogates are trained to model a
+potential energy in sub-components or sub-domains of a PDE,
+and then composed together to solve a larger system by minimizing the sum of potentials across components.
+This allows surrogate modeling without requiring the full system to be
+solved with an expensive ground-truth finite element solver to generate training data.
+Instead, training data are generated cheaply by performing finite element analysis with individual components.
+We show that these surrogates can accelerate simulation of parametric meta-materials and produce
+accurate macroscopic behavior when composed.
+
+In chapter 3 we discuss randomized telescoping gradient estimators, which provide unbiased gradient estimators for objectives which are the limit of a sequence of increasingly accurate, increasingly costly approximations -- as we often encounter in numerical modeling. These estimators represent the limit as a telescoping sum and sample linear combinations of terms to provide cheap unbiased estimates. We discuss conditions which permit finite variance and computation, optimality of certain estimators within this class, and application to problems in numerical modeling and machine learning.
+
+In chapter 4 we discuss meta-learned implicit PDE solvers, which allow a new API for
+surrogate modeling.
+These models condition on a functional representation of a PDE and its domain
+by directly taking as input the PDE constraint and a method which returns samples
+in the domain and on the boundary.
+This avoids haivng to fix a parametric representation for PDEs within the class for which
+we wish to fit a surrogate, and allows fitting surrogate models for PDEs with
+arbitrarily varying geometry and governing equations.
+
+In aggregate, the work in this thesis aims to take machine learning in numerical modeling
+beyond simple regression-based surrogate modeling,
+and instead tailor machine learning methods to exploit and synergize with the
+computational and physical structure of numerical models.
+This allows methods which are more computationally and data-efficient,
+and which have vastly less-restrictive APIs,
+which might better empower scientists and engineers.
+}
+\acknowledgements{To be included in final copy}
+\dedication{To be included in final copy}
+
+
+
+\begin{document}
+
+\chapter{Introduction}
+Numerical methods, such as discretization-based methods for solving ODEs and PDEs, have for centuries helped humanity achieve numerous feats of analysis and design.
+Just a few examples include: using numerically-evaluated sequences and series to build
+early understanding of geometry; predicting the motion of celestial bodies using
+ordinary differential equations (ODEs);
+modeling massive structures under gravitational, wind and seismic loads using partial differential equations (PDEs); optimizing the design of aircraft wings to maximize lift and structure and materials of fuselage to achieve safety with low weight; and modeling electromagnetic and thermodynamic processes in varied regimes such as the human cardiac system,
+the atmosphere, and the plasma in a fusion reactor.
+Such numerical methods are costly in terms of both computation and the time of the expert who must specify the physical model, the discretization, and the solution procedure.
+In this thesis I present a number of methods which use tools from machine learning to accelerate numerical modeling, simulation and design.
+Before the research contributions which form the bulk of the thesis,
+in this introduction I give an overview of numerical modeling,
+motivate both its importance and the need for machine learning techniques which can reduce its costs,
+and give a brief overview and history of existing techniques which do so.
+
+\section{Numerical methods: a vital engineering tool}
+In this section I aim to give a broad perspective on why numerical methods and models
+are important, but why they have some significant costs that we should wish to reduce
+with machine learning.
+It is impossible to give a comprehensive overview of numerical methods in this brief
+introduction, as they touch on many rich areas of applied mathematics.
+To the interested reader I strongly recommend the Princeton Companion to Applied
+Mathematics \citep{higham2015princeton}, which has a great overview
+of the foundational concepts which connect numerical methods to each other and
+to other areas of applied mathematics, and a broad overview of important
+methods and application domains.
+
+
+\subsection{Numerical reasoning}
+Why are numerical methods important?
+They allow us to model systems governed by some mathematically defined laws under simulation.
+Often, but not always, these are physical systems and the laws are known laws of physics.
+Being able to model such systems allows us to reason about the world around us without
+resorting to brute-force experimental trial and error.
+I will use \emph{numerical modeling} to refer to the actions the practitioner takes
+in modeling such systems, which include (i) specifying a
+mathematical model and (ii) choosing and using appropriate numerical methods to
+obtain an approximate solution.
+
+Numerical modeling is used to solve several related problems.
+The three most important are simulation, optimization, and system or
+parameter identification.
+Simulation is the most basic and fundamental of these.
+Given some set of laws and parameters, to simulate the system is to
+predict or understand how it behaves or evolves by modeling the system's solution
+(whether steady-state or as a function of a variable such as time).
+
+The second is system optimization.
+Given some laws and an objective function which
+measures the desirability of a solution -- of the output of a simulation --
+what system parameters give rise to the optimal solution?
+There are many approaches to and algorithms for optimization depending on the specifics
+of the problem.
+However, in most cases simulation is a critical subroutine which may
+be performed many times.
+We must be able to evaluate the solution resulting from some given parameters
+in order to evaluate the objective function corresponding to those parameters.
+
+The third is system identification.
+Given some observations about the world, coupled
+with some known laws, can we identify the system parameters which gave rise to these
+observations?
+As with optimization, this task has simulation as a critical subroutine --
+we need to simulate the system to know what observations some given parameters could
+generate, and whether these observations are close to the observations we made.
+Often, system ID reduces to an optimization problem.
+This reduction holds when we seek parameters which minimize an error metric between
+the true observations and the simulated observations, or equivalently, seek the
+maximum-likelihood parameters under some observation noise model. SysID does not
+naively reduce to optimization in some cases, such as when using Bayesian
+inference to sample from a posterior distribution over parameters.
+Such cases are beyond the scope of this thesis,
+but almost always still have simulation as a critical subroutine.
+
+The key thing to note is that numerical analysis or simulation allows us to do
+counterfactual reasoning.
+If we assume some hypothetical set of laws and parameters, what happens?
+This counterfactual reasoning allows both system optimization and system identification.
+
+Such reasoning and such tasks do not \emph{necessarily} require numerical analysis,
+which is one of three options we have to evaluate outcomes.
+The other options are: to evaluate the outcome of a system by building or testing the
+system in the real world, or to use an analytic mathematical model
+if one is available.
+However, both options have severe limitations.
+
+\subsubsection{Alternative: analytic reasoning}
+Analytic solutions are often desirable when they are available.
+These permit system analysis/simulation, optimization, and identification
+in the same way as numerical solutions.
+One begins with the laws and parameters which specify a system,
+mathematically derives a solution,
+and potentially iterates between updating parameters and deriving a solution
+as part of an optimization or inference procedure.
+
+The difference is that, as opposed to numerical solution, an analytic solution
+involves writing an expression for the \emph{exact} solution,
+which may be evaluated in closed form.
+This avoids the computation/error trade-off which
+is central to numerical methods.
+
+For example, analytic formulae exist for the roots of general polynomials up to degree 4.
+It is usually better to use these formulae than to
+use a numerical method such as Newton's method to find the roots.
+For polynomials of degree greater than 4, the Abel-Ruffini theorem states that there
+is no general analytic formula for their roots.
+Some special higher-order polynomials do permit analytic solution if the mathematician reasons
+about the structure of that particular polynomial, but almost all do not. If either the polynomial is one of the
+majority that do not -- or if one wants to avoid the mathematical labor of determining
+the analytic solution for one of the few polynomials that permit it -- then the only
+option is to resort to numerical methods.
+
+Partial differential equations (PDEs), which we will discuss in depth later, exhibit a
+similar pattern.
+Many simple linear PDEs, such as Poisson's equation, permit analytic solutions
+when the domain is simple (e.g. a disc or unit square) and the boundary conditions (BCs)
+and parameters belong to a simple class of functions (e.g., constant or quadratic).
+However, it might be tedious to derive analytic solutions for each given realization
+ of the PDE consisting of a unique combination of domain, BCs, and parameters.
+And most nonlinear PDEs, and
+linear PDEs with less simple domains, BCs, or parameters,
+do not permit analytic solution.
+
+\subsubsection{Alternative: experimental reasoning}
+One might also perform system analysis, optimization or identification experimentally.
+In this case, analysis involves observing the outcome of a real-world system:
+e.g., measuring the heat at some point on an object or measuring the drag over an
+object in a wind tunnel instead of deriving analytic or numerical solutions to the
+corresponding thermodynmaic PDEs.
+
+Counterfactual reasoning (for system optimization or identification) requires the
+ability to construct and observe the system in the real world.
+This is fine when trials are cheap -- e.g. when learning how to throw a ball to
+maximize the distance, or learning how to imitate someone's tennis serve, the
+cost of evaluating the system (throwing or serving a ball) is negligible.
+It is also a necessary step when faced by incredibly complex systems we are unable to model
+with sufficient accuracy, such as in medicine, where even the best numerical models
+for predicting the effect of a drug on the human body -- or even the interaction of
+a drug molecule with one given protein -- are far too simple and inaccurate
+to completely remove the need for experimental trials.
+And in many cases, experimental trial is an essential step in validating results
+obtained from a numerical or analytic model -- e.g., testing a numerically-optimized aeroplane wing in a wind tunnel -- as inaccuracies or approximations in the
+mathematical system specification or in the solution procedure might cause error in
+the results.
+
+However, for systems which can be modeled and which are expensive to build or have a
+high cost of failure, we cannot fully rely on experimental trial.
+If we wish to optimize the design of a fusion reactor,
+or make sure that a design for a skyscraper will not collapse, it is not feasible to
+iterate blindly building a design and seeing what happens.
+We need to use an analytic or numerical model to reason about the system
+\emph{before} building the design in the real world.
+
+
+\subsection{Elements of numerical modeling}
+What is a numerical model? It is a mathematical model for a system or quantity of
+interest, coupled with numerical methods used to solve the system and reveal the result
+of this model.
+
+In the work in this thesis the mathematical model is often a differential equation
+such as an ordinary differential equation (ODE) or partial differential equation
+(PDE), although naturally there are many other possibilities. The scientist will often
+fix some structure of the model, while allowing some structure or parameters to vary
+over the course of optimizing or fitting the model, or of considering different
+scenraios. For example, we may know that a system should obey the PDE
+given by Poisson's equation, or the ODE for celestial motion given by coupling Newton's
+laws of motion with his law of gravity, but over the course of multiple analyses the
+domain, BCs or source terms of Poisson's equation may change,
+or the bodies considered in the n-body problem may
+change in number, mass, or initial position and velocity.
+
+Given this mathematical model, if an analytic solution is not available
+(and for all but the simplest systems it usually is not),
+it must be solved numerically. There are a multitude of options, even when considering
+a single mathematical system. However, most have some common elements, outlined below.
+
+
+-- \emph{Representation}. First, we need to choose a basis for the solution.
+The true solution will often be a
+continuous \emph{field}, but computers cannot work with fields directly. We need to
+represent the solution with some finite data structure. Usually this means
+\emph{discretizing} the solution: approximating the solution with a representation in
+terms of a finite set of points or coefficients. For example, in celestial mechanics,
+the solution might be a function $y(t): \mathbb{R}^1 \to \mathbb{R}^d$, but we might be happy
+to consider only the positions and velocities of the bodies at some finite set of
+time points: $y_t$ for $t = t_0, t_1, ..., T$. For a Poisson problem the solution
+might be a field $u(x, y): \mathbb{R}^2 \to \mathbb{R}^1$, but in order to solve it
+numerically with finite element analysis (FEA), we represent the continuous solution
+field with a piecewise low-degree polynomial over the domain, which has some finite
+set of coefficients or interpolation points.
+Usualy there is some parameter which controls the fidelity of this approximation: e.g.,
+the number of steps used in solving an ODE or the fineness of a finite element mesh.
+Figure \ref{Fig:mesh_refinement} shows mesh refinement for a finite element model.
+
+\begin{figure}[t]
+  \centering
+\includegraphics[width=1\textwidth]{intro_figures/mesh_refinement.pdf}
+\caption{\small A finite element mesh modeling a rectangular body with an inverse
+circular fillet in one corner. Top: the mesh. Bottom: a scalar field $u$ approximated
+by a piecewise linear function on this mesh. Left to right: the mesh is refined, leading
+to a better approximation of the geometry and the function $u$.}%
+\label{Fig:mesh_refinement}%
+\end{figure}
+
+-- \emph{Translated laws}. Next, we must translate our mathematical model into a form
+which can be applied to the chosen approximate representation.
+If the solution is
+discretized, the mathematical model must be discretized, i.e. turned into an equation
+which the coefficients of the discretized approximate solution should satisfy.
+The approximate solution given representation and translated laws should
+converge as fast as possible to the true solution as the fidelity parameter is increased,
+so that we may obtain an accurate solution without too much computation.
+For example, in finite element analysis we first translate the PDE constraint
+(such as Poisson's equation, $\delta u(x) = f(x) \forall x \in Omega$) to a
+variational form defining what constraints a candidate solution $u \in \mathcal{U}$
+should satisfy with respect to test functions $v \in \mathcal{V}$. When $\mathcal{U}$
+and $\mathcal{V}$ are sufficiently high-order Sobolev spaces consisting of functions
+$\Omega \to \mathbb{R}^d$, we recover the true solution of the PDE $u^*$,
+while if we let them be e.g. piecewise polynomials on a
+finite element mesh, we retain convergence of the $u \in \mathcal{U}$ which satisfies
+the variational form to the true solution as we increase the fineness of the mesh and
+the order of the polynomials.
+In solving an ODE, we must choose how to go from the law
+$\frac{\partial y(t)}{\partial t} = f(t, y(t))$ to a rule in terms of the discrete solution,
+$y_{t+1} = y_t + g(t, y_t)$.
+Common choices include the forward Euler method,
+$y_{t+1} = y_t + \delta_t f(t, y_{t+1})$,
+backward Euler, $y_{t+1} = y_t + \delta_t f(t+1, y_{t+1})$ or Runge Kutta methods,
+which take multiple trial Euler-like steps and combine the results to achieve
+faster convergence with the step size $\delta_t$ \citep{suli2003introduction}.
+
+-- \emph{Numerical solution}. Finally, we must find the solution in the approximating basis
+which satisfies the translated laws.
+Sometimes, as in the forward Euler method, this step
+is direct (just evaluate the right hand side of $y_{t+1} = y_t + g(t, y_t)$ given the current
+value of $y_t$).
+Sometimes this step requires a numerical subroutine such as an iterative method.
+Implicit ODE solvers require a
+root finding method; e.g., to find the $y_{t+1}$ which satisfies
+$y_{t+1} = y_t + g(t, y_t)$ in the backward Euler method.
+In solving PDEs with FEA, we assemble the variational form into a linear or nonlinear system
+in terms of the coefficients of the approximate solution in the finite element basis.
+If the PDE is linear, we solve the system with a direct or iterative method; if it is
+nonlinear, we use an iterative algorithm such as Newton's method or Picard iteration.
+
+For some problems, some of the above steps are trivial, such as
+the numerical solution step for the forward Euler method. In other cases,
+one or more of the steps may involve numerical subroutines about which whole
+textbooks have been written, such as in
+FEA, where we must use specialized algorithms to generate a good mesh to represent
+the solution, assemble the
+variational form into a sparse (non)linear system,
+solve the nonlinear system with a
+Newton-like method, and solve the linearized system at each step of root finding.
+
+\subsection{Examples of numerical modeling}
+
+\subsubsection{Modeling limits of sequences and series}
+One of the oldest examples of numerical modeling is the
+\emph{method of exhaustion}, used in ancient Greece and
+China to reason about areas and volumes. Archimedes
+used this method to estimate the value of $\pi$, by estimating the
+area of a unit circle as the limit of a sequence of polygons.
+
+The underlying mathematical law is the relationship $A = \pi r^2$.
+However, the area of the circle is not known, so $\pi$ cannot be
+determined.
+We choose to represent $A$ as the limit of areas $A_n$ of a sequence of
+regular polygons each with $n$ sides. Whether the polygon is inscribed
+inside the circle ($A^-_n$, where $A^-_n < A$) or outside the circle ($A^+_n$, where $A^+_n > A$), the
+difference in areas $|A_n - A|$ can be reduced by increasing $n$.
+The sequences $A^+_n$ and $A^-_n$ provide upper and lower bounds on the
+value of $A$.
+The discretized problem takes the form of a series, with the translated
+law $A_n = \hat{\pi}_n r^2$, where $r$ is the radius of the circle
+around which or within which the polygon is inscribed.
+To solve the problem, one takes the $A_n$ corresponding to
+the most many-sided polygon for which one can compute the area
+(Archimedes used 96), and uses the
+corresponding $\hat{\pi}^+_n$ and $\hat{\pi}^-_n$ as the upper and lower bounds on $\pi$.
+
+\begin{figure}[t]
+  \centering
+\includegraphics[width=0.9\textwidth]{intro_figures/polygon_cropped.pdf}
+\caption{\small Areas of $n$ sided polygons converge to the area of a circle
+in the limit $n \to \infty$.}%
+\label{Fig:polygon}%
+\end{figure}
+
+
+\subsubsection{Modeling temporal processes with ODEs}
+Temporal processes often include a variable of interest $y$ and a
+rate of change with respect to time, $\frac{dy}{dt}$, which is a
+function of time and the current state: $\frac{dy}{dt} = f(y, t)$.
+An example is Newtonian mechanics, such as those governing celestial motion.
+Here, $y = [x, v]$, $x, v \in \mathbb{R}^{n \times 3}$ is the
+positions and velocities of the $n$ bodies in space ($\mathbb{R}^3$).
+We have $\frac{dy}{dt} = [\frac{dx}{dt}, \frac{dv}{dt}] = [v, a]$, where
+$a \in \mathbb{R}^{n \times 3}$ is the acceleration of the bodies due to
+gravitational force from the other $n$ bodies (which depends on $x$).
+While these equations are easily understandable, there is no analytic
+solution when $n \geq 3$: even for the three body problem, it is very
+hard to reason by hand about all but very special scenarios.
+
+For most $n$-body problems, as for many temporally evolving systems in general, numerical methods are required.
+The relation $\frac{dy}{dt} = f(y, t)$ specifies an \emph{ordinary differential equation} or ODE.
+To solve them, we usually search for a solution $y(t)$ such that
+$\frac{dy}{dt} = f(y, t)$ for all $t$ in the considered time range
+$[t_0, t_f]$, given some initial conditions $y_0$.
+
+Usually, we represent a solution in terms of some set of $y_t$, $t = [t_0, t_1, ..., t_N]$: a series
+of state values at particular points $t$.
+It remains to translate the law $\frac{dy}{dt} = f(y, t)$ to the
+discretized system.
+The easiest way to do this is to take the forwad Euler method: $y_{t+1} = y_t + f(y_t, t)$, in which case the "numerical solution" step
+simply involves evaluating each iterate in turn.
+However, much better convergence of the approximate solution to the true solution can often be obtained.
+Replacing the \emph{explicit} forwad Euler with an \emph{implicit} method such as the backward Euler, $y_{t+1} = y_t + f(y_{t+1}, t+1)$,
+which requires a root-finding algorithm such as Newton's method to numerically solve for each subsequent iterate
+$y_{t+1}$, can greatly improve stability and convergence for ODEs
+which are "stiff" (i.e., tend to be unstable with explicit solvers,
+unless extremely small step sizes are used, even though the solution is
+smooth).
+Replacing the first-order Euler method (forward, backward, or other)
+with a higher order method (such as Runge Kutta or linear multistep methods)
+can improve the rate of convergence of the error from $\mathcal{O}(1/N)$,
+where $N$ is the number of steps used, to $\mathcal{O}(1/N^p)$, where $p$ is the order of the method.
+Runge Kutta methods can be interpreted as (possibly repeatedly) applying \emph{Richardson extrapolation},
+a sequence acceleration method discussed later, to Euler's method,
+to develop faster-converging approximations.
+
+\subsubsection{Modeling spatial and spatiotemporal systems with PDEs}
+Spatial systems and spatiotemporal systems, or other processes which involve
+partial derivatives with respect to multiple variables, can often be modeled by
+\emph{partial differential equations}, or PDEs.
+The solution to a PDE is a field $u$ which maps from a coordinate $x \in \Omega$, where
+usually $\Omega \subset \mathbb{R}^{d_1}$, to a value $u(x) \in \mathbb{R}^{d_2}$.
+The solution is described by a law $F(u)(x) = 0$, $x \in \Omega$, where
+$F$ is a linear or nonlinear operator involving $u$ and its partial derivatives.
+For example, in the Poisson equation (a steady-state equation arising often in
+electrostatics and fluid
+mechanics) we have $d_2 = 1$ (i.e. $u$ is a scalar potential on $\Omega$) and
+$F(u) = \delta u - f$, where $f$ is a (possibly spatially varying) source term and
+$\delta$ is the Laplace operator; the trace of the Hessian,
+$\text{trace}(\frac{\partial^2 u}{\partial x^2})$.
+(In physics the Laplace operator is often written as $\nabla^2 u$, however
+we avoid this notation as it might confuse a machine learning audience used to
+$\nabla^2$ describing a Hessian, not the trace of the Hessian.)
+Figure \ref{Fig:poisson} shows an example mesh, source term, and solution for the Poisson
+problem on a disc.
+In the heat equation we have $F(u) = \frac{\partial u}{\partial t} - \delta u$.
+Both of these are \emph{linear} PDEs, i.e. the operator $F$ is linear in
+$u$ and/or its partial derivatives, however many systems of interest are
+\emph{nonlinear} PDEs.
+A simple example is a nonlinear Poisson problem, varieties of which arise in many scenarios
+when simplifications used to obtain linearity do not hold. For example,
+$F(u) = \text{div}((1 + u^2) \nabla u) - f$, which is equivalent to the standard
+Poisson problem when $u \approx 0$.
+We usually also have some boundary conditions which constrain the value of $u$
+(a "Dirichlet boundary condition") or the derivative of $u$ (a "Neumann boundary condition")
+on some or all of the boundary of the domain $\partial \Omega$.
+
+As with ODEs, the equations are simple, but analytic solutions are not available
+except for special cases.
+This is very often true when $F$ is linear but almost always so when it is nonlinear.
+In order to solve PDEs numerically, as we cannot easily reason about arbitrary fields,
+we must introduce some approximate family of functions with which to represent $u$.
+A common choice is finite elements, employed in \emph{finite element analysis} (FEA).
+The domain $\Omega$ is discretized using a mesh and the solution is represented as a
+piecewise polynomial with the mesh defining the pieces.
+
+To translate the law $F(u)(x) = 0 \ \in \Omega$ to this discretized space,
+FEA first introduces a variational or weak form of the PDE,
+$\int_\Omega <F(u)(x), v(x)> dx = 0 \ \ \forall v \in \mathcal{V}$.
+Ignoring mathematical subtleties, this weak form is equivalent to the original form
+if the family $\mathcal{V}$ is chosen to be the set of all functions mapping from
+$\Omega$ to $\mathbb{R}^{d_2}$.
+This variational form is amenable to discretization.
+Let the family of piecewise polynomial functions representable in the finite element
+function space be denoted $\mathcal{V}_{p, n}$, where $n$ is a measure of the number of
+mesh elements and $p$ a measure of the polynomial order of the space used, and
+consider an approximate solution $u_{p, n}$ in this space.
+The translated law is $\int_\Omega <F(u_{p, n})(x), v(x)> dx = 0 \ \
+\forall v \in \mathcal{V}_{p, n}$.
+To test this constraint it suffices to test the integral is zero for a finite
+set of functions which form a basis for $\mathcal{V}_{p, n}$.
+We assemble the integral $\int_\Omega <F(u_{p, n})(x), v_i(x)> dx$ for each $v_i$ in
+this basis, and rewrite it as a function of $\vec{u}$, the coefficients of the
+function $u_{p, n}$ in the piecewise polynomial basis.
+The result is a system of equations $\vec{F}(\vec{u}) = 0$,
+which $\vec{u}$ must satisfy in order to satisfy
+the discretized weak form of the PDE for all $v_i$ forming a basis for
+$\mathcal{V}_{p, n}$.
+We have translated the continuous law into a numerical system
+of equations.
+If the PDE is linear, the system will also be linear and we can solve it with an
+appropriate method such as QR decomposition or conjugate gradients.
+If the PDE is nonlinear, the system of equations will be nonlinear and we will need
+to apply an iterative root finder such as Newton's method (which will usually
+call a linear solver at each root finding step).
+Importantly, as $p$ and $n$ increase and under appropriate conditions, the
+solution $u_{p, n}$ which satisfies this system of equations converges to the true
+solution $u$ to the PDE.
+
+\begin{figure}[t]
+  \centering
+\includegraphics[width=10cm]{intro_figures/poisson_equation.pdf}
+\caption{\small The Poisson equation on a unit disc. Left: the finite element mesh.
+Center: the source term. Right: the approximate finite element solution $u$, found with
+FEA. Figure: \citet{xue2020amortized}.}%
+\label{Fig:poisson}%
+\end{figure}
+
+\subsubsection{Statistical and optimization-based modeling}
+Modern machine learning is, naturally, also a form of numerical modeling,
+albeit one with a very different flavor to more traditional approaches such as those
+for modeling systems with ODEs and PDEs.
+We are often interested in a "ground truth" data generating or labeling process or
+function, or interested in an optimal control policy or decision rule.
+The different flavor of machine learning arises because the description of this function
+does not ususally come in the form of physical constraints it should obey,
+but in the form of some data (e.g., labeled training examples) or interaction
+(e.g., state-action sequences of a reinforcement learning agent and the assosciated
+rewards) coupled with a loss function (which might include per-datum losses and
+regularization or a prior) we want our function of interest to minimize.
+(Bayesian inference instead comes with an observation model, and the goal is to
+characterize the posterior distribution over functions or parameters of interest).
+
+Another difference is the function approximators typically employed --
+neural networks, kernel methods, and linear models, as opposed to the highly structured
+piecewise polynomials and piecewise linear functions often found in physical modeling.
+This is in part because the input and sometimes output spaces in machine learning are
+usually much higher dimensional than in physical problems where $\mathbb{R}^2$,
+$\mathbb{R}^3$, or in general $d < 10$ are the most common.
+
+Nonetheless, there is much similarity. It is hard to reason analytically about the
+optimal learned function.
+We thus restrict to some family of functions which can be
+represented numerically -- e.g. by the weights and biases in a neural network, or
+by the data itself (used for interpolation) for Gaussian process regression or a
+kernel method.
+In the former case, we search for a good function within the function class via
+(possibly stochastic) optimization, and query this on new inputs of interest
+by passing the data through the neural network.
+In the latter case, finding the optimal representation requries no work for an exact GP
+(just storage of the data points) but querying the
+"learned" function on new data requires solving a large linear system. As with physical models,
+we also often wish to place ML-style numerical modeling (whether with NNs, GPs, or
+many other methods) within an optimization loop, to find the hyperparameters which give
+the best learning performance for a particular task under the metric of interest
+(usually, generalization or test error).
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=8cm,clip]{intro_figures/inner_loop_opt.pdf}
+\caption{\small Learning curves (performance vs epoch) at each iteration of optimizing
+the hyperparameters of a neural network. The relative performance with a given
+hyperparameter setting at earlier epochs of training
+is a useful but imperfect approximation of the performance
+at later epochs. Figure: \citet{swersky2014freeze}.}%
+\label{Fig:inner_loop_opt}%
+\end{figure}
+
+\subsection{The costs of numerical modeling and design}
+We have discussed why numerical modeling is
+important and the key elements of its application.
+Why should we seek to accelerate it with machine learning?
+
+The numerical modeling procedures described above have significant nested
+computational and human costs.
+These costs are compounded in numerical design and system identification.
+Consider, for example, using FEA to perform numerical design when the
+design's behavior will be governed by a nonlinear timestepping PDE:
+
+\begin{algorithm}[H]
+  \SetAlgoLined
+  \caption{Numerical design with FEA}
+  \For {each qualitatively different candidate design or component}{
+  Define a suitable mathematical model (PDE, BCs, domain) and finite element approximation (mesh, element type, solver)\;
+  Define an objective for PDE-constrained optimization (a set of operating conditions and a set of fitness functions to measure the quality of the solution under each operating condition)\;
+  \For {each of $G$ gradient steps optimizing the free system parameters}{
+  \For {each of $C$ operating conditions}{
+  \For {each of $T$ time steps in the simulation}{
+  \For {each of $N$ Newton steps solving the nonlinear PDE}{
+  Solve a sparse linear system of size $\mathcal{O}(n^d \times n^d)$,
+  where we have $n$ elements along each of $d$ spatial dimensions\;
+  }
+  }
+  Use the adjoint method to compute the gradient of the objective\;
+  }
+  }
+  }
+\end{algorithm}
+
+The outer \emph{for} loop contains the significant human costs of designing an
+appropriate model, discretization, and objective.
+Often this process will need to be iterated until results of simulation and optimization
+are satisfactory.
+Sometimes significant computation will also need to be spent here (e.g. generating a mesh).
+
+The inner \emph{for} loops include significant computational expense from the
+many linear system solves required. Unlike in many machine learning workloads,
+the cost of computing the gradient of the
+objective is not significant next to the cost of running the simulation and computing
+the objective. Given a solution and an objective function placed on that solution,
+the gradient with respect to the PDE parameters can be taken with the \emph{adjoint method}
+\citep{lions1971optimal,mitusch2019dolfin}. Excluding the cost of the adjoint method,
+we see
+$G \times C \times T \times N$ calls to the linear system solver. Computing the gradient
+with the adjoint method has approximately the same cost as solving a linearized form of
+the PDE, i.e. a cost of $\mathcal{O}(G \times C \times T)$ solver calls.
+The cost of PDE-constrained optimization is dominated by the cost of solving the PDE
+at each optimization step.
+%\todo{pics}
+The cost of each call to the linear solver will depend on the chosen solver and on the
+structure of the finite element discretization. For a regular grid on the 2d plane and
+using any direct linear solver, there is a lower bound of $\mathcal{O}(n^3)$ computation
+for $n$ elements along each spatial dimension (i.e. $n^2$ total elements).
+In some cases indirect solvers may do better, and irregular grids may incur extra cost.
+However, we can naturally never hope to do better than $\mathcal{O}(m)$ for m total
+elements or degrees of freedom (e.g., $m = n^2$ for a regular $n \times n$ grid in $\mathbb{R}^2$)
+\citep{hoffman1973complexity}.
+
+How large can we expect this system to be? For small problems, dozens or hundreds of
+elements might suffice.
+However, modeling complex systems like a rocket engine, a fusion reactor, or a large mechanical structure might use as many as millions of elements.
+The engineer must spend significant effort specifying both the design and numerical method,
+and may have to wait hours, days, or weeks to see the outcome of a specific simulation,
+the results of which might then suggest the need to adjust the design or method.
+
+Of course, engineers make use of approximations to lessen this load.
+Such approximations might take the form of splitting a design or system into components
+which are simulated separately; introducing approximations into the mathematical
+model by e.g. simulating something in 2d instead of 3d, considering steady-state
+instead of temporal simulations, or making assumptions about a particular
+term in an equation; or simply using a coarser discretization than would be ideal.
+These approximations both increase the human effort required and introduce a degree of error.
+
+An important concept is the pareto frontier of effort (computational or human) vs accuracy.
+There will always be a need for new methods or approximations which improve this frontier.
+Such new methods not only decrease the human and computer effort required to run existing
+workloads, but can increase the accuracy of our numerical modeling (because we no longer have
+to cut the corners we once did), and allow us to analyze, identify, and design systems
+too large or complex for the previous state of the art.
+However, if we introduce a new method, it is important to measure it against the
+pareto frontier of an existing method -- not a single point on said frontier.
+
+Consider a situation where we introduce a method for using neural networks to
+predict the solution to a PDE from some parameters, and show that this produces
+solutions which have only a small amount of error when compared to a given finite
+element model, or only 10\% higher error when both methods are compared to some
+other known ground truth, while being many
+times as fast. This information is not sufficient to say that the new method is useful.
+By changing the fidelity of the finite element method (controlled by the density of
+the finite element mesh and the polynomial order of the elements) we can also trade off
+accuracy for speed, and it might be the case that simply decreasing the density of the mesh
+can create the same speed up with the same or less increase in error.
+We must measure new methods against a pareto frontier of the existing methods we compare them to.
+Unfortunately, much work in the burgeoning area of machine learning for engineering does
+not do this.
+
+We now understand something of the cost of numerical modeling and design, and how
+methods to reduce this cost should be evaluated.
+In the next section, we discuss how machine learning can be and has been used
+to accelerate numerical modeling.
+
+\section{Accelerating numerical modeling with machine learning}
+
+Leveraging approximations to accelerate numerical modeling and design is not a new idea,
+and has been an important topic in applied mathematics since at least the early 1900s.
+We will first outline a general concept of what we might hope to achieve -- how we
+might hope to leverage different sources of information within a problem to better
+estimate some quantity without fully resolving it with our numerical model.
+Then we will take a brief tour of prior work along these lines, both work focussing on
+the general approximation of functions with resolution-speed trade offs, and
+work which leverages specific physical or algorithmic structure of simulations.
+It is not possible for this section to be exhaustive, and there will be much important
+work that we miss for the sake of brevity.
+
+\subsection{What can we hope to achieve?}
+
+Generally speaking, we can consider some baseline numerical model $f$ which acts on some
+representation of the scenario or design $\phi$ and returns a quantity of interest $y = f(\phi)$.
+We wish to approximate $y$ without running $f$ (to avoid the expense involved),
+instead taking $y \approx \hat{f}(\phi)$, where $\hat{f}$ is our approximate model.
+
+\subsubsection{Sources of information}
+If we are not to call $f$, then $\hat{f}$ must use some information about $f$
+available from one or more other sources in order to provide better-than-arbitrary
+estimates of $y$. What such sources of information are available?
+Many methods will use more than one of the following, and we discuss examples of each
+in both the overview of existing approaches and in the research contributions of
+the thesis.
+
+
+\begin{itemize}
+  \item \emph{Results of cheaper or lower-fidelity simulations $y_i = f_i(\phi)$.}
+  In numerical modeling we often have access to some sequence of approximations $f_i$,
+  where as $i \to \infty$, $y_i = f_i(\phi)$ converges to the true quantity we are
+  interested in, but so does the difficulty or cost of evaluating $f_i$.
+  If we know something about the convergence properties of the sequence of models $f_i$,
+  this knowledge might allow us to use evaluations of some of the
+  models $f_{1:i-1}$ to approximate the result of $f_i$ as
+  $\hat{y}_i = \hat{f}_i(y_1, y_2, ... y_{i-1})$ without evaluating it.
+  A quintessential example of this is \emph{sequence acceleration}
+  \citep{osada1991acceleration}, discussed in the
+  next section. \\
+  \item \emph{Results of simulation of similar problems, $y' = f(\phi')$.}
+  Given a training set consisting of parameterizations of particular problems $\phi_i$
+  and the solutions to those problems $y_i$, we may try to learn an approximation
+  $\hat{f}$ to the function/model $f$ which is cheaper to evaluate than $f$ itself.
+  A quintessential example of this is surrogate modelling via simply regressing from the
+  training $\phi_i$ to the target solutions $y_i$.\\
+  \item \emph{Known computational or physical structure associated with the
+  model $f$.} This is a broad category.
+  In many cases, leveraging known computational
+  structure in the numerical model $f$ or known physical or mathematical properties of
+  the system $f$ approximates will improve methods which rely on generalization from
+  lower-fidelity iterates $f_{<i}$ or from similar problems $y' = f(\phi')$.
+  However, leveraging this structure can also be used to design new numerical models
+  $y \approx \hat{f}(\phi)$ which can be used as simulators without requiring information from
+  $f$ for training or evaluation.
+\end{itemize}
+
+\subsection{Extrapolation and sequence acceleration}
+One of the earliest examples of work with a similar flavor to that in this thesis
+is the subfield of applied mathematics concerned with \emph{sequence acceleration} or
+\emph{series acceleration}.
+See \citet{osada1991acceleration} for an excellent overview.
+Much of the key work in sequence acceleration was done in the early 20th century, however some early transformations were known to Stirling, Euler,
+Maclaurin, and Seki Kowa.
+
+Given a sequence $s_n$ which converges to a limit, $\lim_{n \to \infty} s_n = s^*$,
+sequence acceleration is concerned with constructing a transformed sequence $s'_n$
+which converges to the same limit but with a faster rate of convergence.
+This can be restated as designing a transformation operator $\mathcal{T}$, where
+$s'_n = \mathcal{T}(s_n, s_{n-1}, ..., s_1)$.
+Formally, $\mathcal{T}$ accelerates the sequence if
+$\lim_{n \to \infty} \frac{s'_n - s^*}{s_n - s^*} = 0$.
+However, we are often interested not in just whether $\mathcal{T}$ accelerates the
+sequence but in how fast the new convergence of $s'_n$ to $s^*$ is: e.g.
+if the sequnce is polynomially converging, $|s'_n - s^*| = \mathcal{O}(\nicefrac{1}{n^p})$,
+we would like $p > 0$ to be as high as possible,
+whereas it would be even better if it were geometrically converging,
+$|s'_n - s^*| = \mathcal{O}(1-p)^n$, where we would like
+$ 0 < p < 1$ to be as large as possible.
+These are often called logarithmic and linear convergence in cases
+where the studied quantity is not the big-O behavior of $|s_n - s^*|$ but the limiting
+ratio of subsequent errors,
+$\lim_{n \to \infty} \frac{|s_{n+1} - s^*|}{|s_n - s^*|}$.
+
+These methods can be used to accelerate numerical modeling when we have some
+parameter which trades off computation or effort for fidelity: for example, the
+resolution of a finite element mesh, or the number of steps or inverse stepsize used to solve an ODE,
+or the number of iterations in a Newton method or in an optimization procedure
+used to train a neural network.
+In such cases, we are often interested in
+the limit of some quantity as we allow an unbounded amount of computation.
+However, we only have a finite computational budget.
+Given this finite budget, we might hope that by evaluating the quantity of interest
+at several different fidelities ($s_1 ... s_n$), we might be able to extrapolate
+($s'_n$) to get a better estimate of the limit $s^*$ than using $s_n$ alone.
+
+It is not possible to find an operator $\mathcal{T}$ which accelerates all sequences.
+Some assumptions must be made about the original sequence, e.g. its original rate of
+convergence, and it is also useful to know if the sequence is asymptotically alternating
+or monotonic.
+
+Each sequence acceleration method has a class of sequences which it will accelerate.
+Two of the most famous methods are \emph{Richardson extrapolation}, for polynomially
+convergent sequences, and \emph{Aitken's delta-squared method}, for geometrically
+convergent sequences.
+
+Richardson extrapolation is designed for sequences which have an asymptotic
+expansion $s_n = s^* + C \nicefrac{1}{n^p} + \mathcal{O}(\nicefrac{1}{n^{p+1}})$. (Often, $n$ is the inverse of the
+stepsize of an ODE integrator).
+We choose some factor $\tau > 1$ and construct the extrapolation
+\[
+R(n, \tau) = \frac{\tau^p s_n - s_{n/\tau}}{\tau^p - 1}
+\]
+We then have:
+\begin{align*}
+R(n, \tau)(\tau^n - 1) &= \tau^p(s^* + C \nicefrac{1}{n^p} + \mathcal{O}(\nicefrac{1}{n^{p+1}})) - (s^* + C \nicefrac{1}{(n/\tau)^p} + \mathcal{O}(\nicefrac{1}{(n/\tau)^{p+1}}))\\
+\implies R(n, \tau) &= s^* + \mathcal{O}(\nicefrac{1}{n}^{p+1})
+\end{align*}
+Thus, Richardson extrapolation eliminates the $C \nicefrac{1}{n^p}$ term in
+the asymptotic expansion of $s_n$, giving a higher order / faster converging error
+$\mathcal{O}(\nicefrac{1}{n^{p+1}}$.
+
+Aitken's delta-squared process is the transformation:
+\[
+s'_n = \frac{s_n s_{n-2} - s_{n+1}}{s_n + s_{n-2} - 2*s_{n-1}},
+\]
+or equivalently,
+\[
+s'_n = s_n - \frac{(s_n - s_{n-1})^2}{s_n - 2 s_{n-1} + s_{n-2}}
+\]
+
+Aitken's delta-squared process accelerates any geometrically (or linearly)
+convergent sequence.
+As opposed to Richardson extrapolation, which eliminates the slowest polynomial error term, Aitken's delta-squared process can be thought of as eliminating the slowest geometric error term.
+If the series has an asymptotic expansion $s_n = s^* + a^n$ with $0 < a < 1$, then the transformation is exact ($s'_n = s^*$) for all $n$. If the series has an asymptotic expansion $s_n = s^* + a^n + \mathcal{O}(b^n)$   where $0 < b < a < 1$, then the transformed series has the asymptotic
+expansion $s'_n = s^* + \mathcal{O}(b^n)$, i.e. eliminating the slower
+$a^n$ term.
+
+Sequence acceleration methods are not today very commonly used by practitioners.
+However, as well as being of historical and intellectual interest,
+they underpin a number of fast-converging
+numerical methods for various applications,
+which can be derived by application of one of these
+sequence acceleration methods to a "base" numerical method.
+For example, higher-order Runge-Kutta methods for ODE integration can be derived from
+first-order Euler methods by repeatedly applying Richardson extrapolation
+$p-1$ times to achieve a method with convergence of order $p$.
+(Runge-Kutta methods slightly predate Richardson's introduction of his general
+extrapolation scheme, but their motivation, method and analysis is an exact application
+of the extrapolation).
+Richardson extrapolation is also used to derive Romberg's method for integration by repeated application to the trapezium rule.
+Aitken's delta-squared process can be applied to a fixed point
+iteration to derive Steffenson's method, which has quadratic convergence (a la Newton's method) while not requiring derivatives.
+Historically, sequence acceleration methods have been applied to one-dimensional sequences,
+and they can sometimes be lacking when applied naively to higher-dimensional problems (e.g., Steffenson's method runs into a "curse of dimensionality" with high-dimensional root-finding problems).
+Much of the work on sequence accelertation in recent decades has
+been on extending or developing methods for vector sequences \citep{osada1991acceleration}.
+
+
+\subsection{Surrogate modeling}
+A natural approach to accelerating numerical modeling is to regress from a parameter
+of the design or factor of variation of the numerical model
+on to the solution (or a quantity of interest associated with the solution).
+This regression model provides a \emph{surrogate model} for the base simulator.
+If the surrogate model is accurate, it can be queried in place of the simulator to
+do analysis, optimization or system ID -- i.e., to answer questions about the
+system's behavior in particular scenarios, the optimality of designs, or the
+likelihood of system parameters given observations.
+
+Any and every regression method can and has been used for such tasks --
+linear regression, polynomial regression, kernel methods, neural networks, and more.
+For overviews of the broad volume of work in this area, see \citet{simpson2001metamodels,martin2005use,queipo2005surrogate,
+koziel2013surrogate,willard2020integrating}.
+A distinction beyond the regressor is \emph{what is predicted}.
+One route is to directly predict the solution $y$ to a numerical model $f$ with parameters
+$\phi$, $y = f(\phi)$, using the learned regressor: $y \approx \hat{f}(\phi)$.
+This lets one use the surrogate to answer whatever questions one wishes about the
+solution $y$.
+However, $y$ might be indexed by a high-dimensional vector of coefficients, and
+the learning task of predicting $y$ from $\phi$ might be very hard.
+Worse, the way in which $y$ is represented (e.g., the size and meaning of the vector
+of coefficients) might change depending on $\phi$: e.g. if changing $\phi$ means
+a problem domain is larger or smaller, or has different geometry.
+This will break many regression models.
+As such, it is sometimes more useful to choose an alternate quantity to predict.
+If one is interested in the performance of a design, measured by an objective function,
+then one can predict that scalar objective value directly from $\phi$ without
+modeling the solution.
+This could be an easier learning problem if, for example, there are ranges of $\phi$
+which cause large, unstable variations of the solution but which all have a poor
+objective value.
+
+Another choice is possible when simulation can be framed as a bi-level
+problem.
+In this scenario, the solution to one or more "inner" problems $z = g(\gamma)$
+is used when solving the "outer" problem $y = f(\phi)$, and where $g$ is the solution
+procedure for the inner problem; $\gamma$ are the parameters, and $z$ is the output
+of the inner problem.
+The inner problem(s) might have more regularity than the outer problem -- i.e.,
+the mapping $z = g(\gamma)$ may be easier to learn, or the outer problem solution
+representation $y$ may change significantly with $\phi$ while the inner solution
+representation $z$ does not -- often this occurs when $g$ may be called multiple times,
+varying with $\phi$, to compute $z_{1..l}$ which are used in computing $y$.
+If a surrogate model for $g$ would significantly reduce the cost of one full solution,
+training a surrogate $z \approx \hat{g}(\gamma)$ and using this as a component in the
+numerical model for $y$ may be an effective strategy.
+For example, \citet{tompson2017accelerating} accelerate solving linear systems which
+are the computational bottleneck for Eulerian simulation of the Navier-Stokes
+equations, while in \citet{beatson2020learning} we accelerate computing strain energies
+and strain energy gradients which must be computed at each Newton iteration of solving
+a continuum mechanics PDE.
+
+One other factor of interest for surrogate models is the training method.
+Naively applying regression requires one to solve many "full" simulations
+to generate training data, and is thus only useful if one would otherwise need
+to query the simulator many more times than the number of training points required
+(which might be thousands).
+Instead training a model to predict the solution of some sub-problem can allow
+training data to be generated much more cheaply
+\citep{tompson2017accelerating,beatson2020learning}.
+Another avenue is to exploit the particular structure of the numerical model to avoid
+the need to call the original simulator entirely, e.g. by learning a model
+$y \approx \hat{f}(\phi)$ by minimizing some physically-motivated loss
+$\mathcal{L}(y, \phi)$ which is also minimized by the solution to the original
+numerical model $f$ \citep{xue2020amortized}.
+
+\subsection{Model order reduction}
+Rather than predicting the outcome of a simulation or of one of the subroutines in the
+simulation, \emph{model order reduction} methods learn a solution basis which allows for
+more efficient simulation.
+Most of them rely on a projection operator to project the solution to a
+lower-dimensional latent space (or return it from this to the full solution space).
+The laws governing the numerical model must then be approximated by some laws in the
+latent space which give rise to a similar result.
+
+The most well known method is the \emph{proper orthogonal decomposition} (POD) \citep{chatterjee2000introduction}, used to
+reduce the complexity of finite element simulations.
+POD involves performing principal component analysis on some set of observations,
+called snapshots, of $y$, where the solution $y$ to the numerical model is a field of
+interest such as the velocity, density and pressure fields in a Navier-Stokes simulation.
+We represent $y_i(x) = \sum_{k=1}^K \alpha_{i,k} \eta_k(x)$, where $\eta_k$ are the
+principal components, $y_i$ are the solutions at different times or for different
+systems or designs, $\alpha_{i, k}$ are the weights, and $x$ is a coordinate in the
+domain $\Omega$.
+As with PCA in machine learning, the POD is often used for understanding and visualizing
+data, which in the POD's case arises from real-world experiments or from simulation.
+However, the POD is also used as a tool to accelerate simulation, by projection of the
+linear system governing the finite element model, $A\vec{y} = b$, into a lower
+dimensional space, $A' \vec{\alpha} = b'$.
+
+Another dimension reduction method related to the work in this thesis is static
+condensation, or Guyan reduction \citep{guyan1965reduction}.
+In finite element analysis it is often the case that only some degrees of freedom
+(often those on the boundary) may be "loaded" (have values constrained via
+Dirichlet boundary conditions or external forces imposed via Neumann boundary conditions)
+while the others are "unloaded" and will always be governed by the same physical laws,
+regardless of the loading scenario.
+Static condensation provides a way to develop an \emph{exact}
+reduced-order model when the only factor of variation is the load or boundary
+conditions imposed and when the underlying PDE is linear.
+Using finite element analysis, we write the coefficients of the solution in the finite
+element basis in terms of a linear system $A\vec{y} = b$.
+This can be partitioned in terms of the free and loaded degrees of freedom as:
+\[
+\begin{bmatrix}
+A_{l,l} & A_{l,f} \\
+A_{f,l} & A_{f,f}
+\end{bmatrix}
+\begin{Bmatrix}
+  \vec{y}_l \\
+  \vec{y}_f
+\end{Bmatrix} =
+\begin{Bmatrix}
+  b \\
+  0
+\end{Bmatrix}
+\]
+This linear system is rearranged to eliminate $\vec{y}_f$, and be written in terms of
+$\vec{y}_l$ alone.
+This might be useful when, for example, we are modeling a system formed of multiple
+components and for many of the components we are not interested in the internal degrees
+of freedom -- only in how those components interact with others via the boundary.
+
+The above methods are linear, and typically are restricted to linear or
+approximately linear PDEs.
+Developing model order reduction methods for nonlinear PDEs is an exciting area for
+machine learning (which has seen a lot of recent work on learning nonlinear schemes
+for compressing data to latent representations with neural networks).
+We present some work along this line in the thesis.
+Other interesting recent work in the same theme includes
+\citet{bar2019learning}, \citet{maulik2021reduced}, and many more.
+
+\subsection{Randomized methods}
+A concept and approach somewhat orthogonal to the aforementinoed methods
+is to reduce computation via randomization.
+Often, this involves using randomization as an important tool within e.g.
+projection-based model order reduction methods.
+Random snapshot selection can, given a suitable distribution over snapshots, quickly
+converge to a basis which can represent the solution with smaller error.
+In other cases, this involves using randomization to speed up a core subroutine of
+the numerical solution procedure.
+For example, randomized algorithms can be used to provide fast approixmations to the
+matrix SVD or to the solution of linear systems
+\citep{drineas2006fast,drineas2016randnla}, by projecting the system with a
+random matrix (often of i.i.d. Gaussian vectors) to a lower-dimensional subspace.
+
+Possibly the most well-known use of randomness to accelerate computation is the use
+of stochastic gradient descent in machine learning
+\citep{robbins1951stochastic,bottou2010large}.
+Given a large dataset, it is computationally prohibitive to estimate the gradient of a
+model's loss averaged over all examples in the dataset.
+However, if we randomly choose a batch of examples on which to compute and average
+the loss, the gradient of this loss is a random but unbiased estimator of the full
+gradient, with variance depending on the size of the batch.
+Using this gradient estimator for first-order optimization can lead to much faster
+optimization (in terms of reduction of the loss as a function of computational effort)
+than the full-batch gradient, especially as the size of a dataset increases, and
+particularly as most datasets have some covariance between per-example gradients
+(i.e. many examples in the dataset may have similar loss and gradient functions).
+In \citep{beatson2019efficient}, included in this thesis, we show how to
+build a cheap stochastic gradient estimator for objectives involving
+discretization-based numerical models.
+
+\section{Research contributions in this thesis}
+
+In this thesis we present some recently developed methods for accelerating
+numerical modeling, simulation, and design.
+This work has been been the fruit of collaboration with a number of wonderful
+colleagues, without whom it would not have been possible, and without whom
+I would have learnt far less and had far less fun.
+
+In \textbf{Chapter 2} we present \emph{composable energy surrogates} \citep{beatson2020learning};
+a method which leverages
+modular structure to learn component-level surrogates for modular PDEs; specifically
+those governing mechanical meta-material deformation.
+These mix attributes of surrogate modeling and model order reduction, and allow
+learning of fast approixmate solvers while only using supervision from data collected
+by solving cheap PDEs governing component subregions, rather than requiring data
+collected by solving the PDEs governing the full system we wish to solve in deployment.
+This work was presented at NeurIPS 2020 and was carried out in collaboration with
+Jordan T. Ash, Geoffrey Roeder, Tianju Xue, and Ryan P. Adams.
+
+In \textbf{Chapter 3} we present \emph{randomized telescoping gradient estimators} \citep{beatson2019efficient}, which are
+randomized gradient estimators for objectives which are the limit of a sequence of
+approximations (as when performing optimization or design with numerical models).
+By randomizing the fidelity of the approximation, we obtain unbiased gradient estimators
+which trade computation for variance.
+We provide recipes for choosing within the family of such estimators and demonstrate
+their effectiveness in system identification and machine learning hyperparameter
+optimization.
+This work was presented at ICML 2019
+and was carried out in collaboration with Ryan P. Adams.
+
+In \textbf{Chapter 3},
+we present \emph{meta-learned implicit PDE solvers} (Meta-PDE), which are neural networks
+representing PDE solution fields, which have initializations meta-learned across a
+family or distribution of PDEs such that they converge quickly to represent the solution
+of a given PDE in a few gradient steps of minimizing that PDE's variational energy.
+This provides a surrogate modeling method which is agnostic to geometry and is mesh-free:
+while many other surrogate modeling techniques require a geometry and mesh to be fixed
+across the family of problems they amortize, this method only requires the user to
+supply a sampler for the variational energy of (or a sampler for the geometric domain of)
+each problem within the family to be amortized -- usually a much easier task.
+This work is in preparation for publication, and has been
+carried out in collaboration with Sunny T Qin, Nick McGreivy, and Ryan P. Adams.
+
+Beyond the work presented in the thesis, these themes and ideas have been
+both cultivated by and continued in papers led by
+other phenomenal researchers with whom I've had the pleasure of collaborating.
+"SUMO: Unbiased Estimation of Log Marginal Probability for Latent
+Variable Models" \citep{luo2019sumo},
+led by Yucen Luo and Ricky Chen, demonstrates
+an important application of randomized telescope-like estimators to
+variational inference.
+"Randomized Automatic Differentiation" \citep{oktay2021randomized},
+led by Deniz Oktay, uses similar philosophy to
+randomized telescopes to develop a stochastic gradient method for a
+regime beyond the usual one of a separable dataset,
+but in this case for the general setting of linearizable computational graphs.
+In \citep{ravi2018amortized},
+led by Sachin Ravi, Sachin and I
+realized the potential of meta-learning as a tool for amortizing
+optimization and computation (rather than "just" being a tool for
+few-shot generalization), which is a crucial principle for Meta-PDE;
+our time thinking hard about bi-level optimization also
+helped ferment the other two chapters.
+Finally,
+"Amortized Finite Element Analysis for Fast PDE-Constrained Optimization" \citep{xue2020amortized},
+led by Tianju Xue, laid the foundation for the Meta-PDE
+project by establishing the principle of using a neural network to
+minimize a variational energy rather than a supervised loss,
+avoiding expensive training data generation for surrogate modeling.
+
+
+\chapter{Learning composable energy surrogates for PDE order reduction}
+
+\section{Abstract}
+Meta-materials are an important emerging class of engineered materials in which complex macroscopic behaviour--whether electromagnetic, thermal, or mechanical--arises from modular substructure.
+Simulation and optimization of these materials are computationally challenging, as rich substructures necessitate high-fidelity finite element meshes to solve the governing PDEs.
+To address this, we leverage \emph{parametric} modular structure to learn component-level surrogates, enabling cheaper high-fidelity simulation.
+We use a neural network to model the stored potential energy in a component given boundary conditions. This yields a structured prediction task: macroscopic behavior is determined by the minimizer of the system's total potential energy, which can be approximated by composing these surrogate models. Composable energy surrogates thus permit simulation in the reduced basis of component boundaries. Costly ground-truth simulation of the full structure is avoided, as
+training data are generated by performing finite element analysis of individual components. Using dataset aggregation to choose training data allows us to learn energy surrogates which produce accurate macroscopic behavior when composed, accelerating simulation of parametric meta-materials.
+
+\input{lces/sections/1_intro}
+\input{lces/sections/2_collapsed}
+\input{lces/sections/3_metamaterial}
+\input{lces/sections/4_surrogates}
+\input{lces/sections/5_training}
+\input{lces/sections/6_deployment}
+\input{lces/sections/7_discussion}
+\section{Conclusion}
+We present a framework for collapsing optimization problems with local bilevel structure by learning composable energy surrogates. This framework is applied to amortizing the solution of PDEs corresponding to mechanical meta-material behavior. Learned composable energy surrogates are more efficient than high-fidelity FEA yet more accurate than low-fidelity FEA, occupying a new point on the Pareto frontier. We believe that these surrogates could accelerate metamaterial design, as well as design and identification of other systems described by PDEs with parametric modular structure.
+
+\chapter{Efficient optimization of loops and limits with randomized telescoping sums}
+We consider optimization problems in which the objective requires an inner loop with many steps or is the limit of a sequence of increasingly costly approximations.
+Meta-learning, training recurrent neural networks, and optimization of the solutions to differential equations are all examples of optimization problems with this character.
+In such problems, it can be expensive to compute the objective function value and its gradient, but truncating the loop or using less accurate approximations can induce biases that damage the overall solution.
+We propose \emph{randomized telescope} (RT) gradient estimators, which represent the objective as the sum of a telescoping series and sample linear combinations of terms to provide cheap unbiased gradient estimates.
+We identify conditions under which RT estimators achieve optimization convergence rates independent of the length of the loop or the required accuracy of the approximation.
+We also derive a method for tuning RT estimators online to maximize a lower bound on the expected decrease in loss per unit of computation.
+We evaluate our adaptive RT estimators on a range of applications including meta-optimization of learning rates, variational inference of ODE parameters, and training an LSTM to model long sequences.
+
+
+\input{rt/sections/1_intro}
+\input{rt/sections/2_unbiased}
+\input{rt/sections/3_optimization}
+\input{rt/sections/4_convergence}
+\input{rt/sections/5_adaptive}
+\input{rt/sections/6_practical}
+\input{rt/sections/7_results}
+\input{rt/sections/8_discussion}
+
+\section{Conclusion}
+We investigated the use of randomly truncated unbiased gradient estimators for
+optimizing objectives which involve loops and limits.
+We proved these estimators can achieve
+horizon-independent convergence rates for optimizing loops and limits.
+We derived adaptive variants which can be tuned online
+to maximize a lower bound on expected improvement per unit
+computation. Experimental results matched theoretical intuitions that the
+single sample estimator is more robust than Russian roulette for optimization.
+The adaptive RT-SS estimator often significantly accelerates
+optimization, and can otherwise fall back on the un-truncated estimator.
+
+
+\chapter{Meta-PDE: Learning to solve PDEs quickly without a mesh}
+
+\section{Abstract}
+Partial differential equations allow us to
+model and design a wide variety of systems.
+Solving PDEs with finite element methods
+can be computationally prohibitive,
+and when optimizing a design or fitting a PDE model to data,
+the PDE must be solved for many different values of parameters controlling governing equations, boundary conditions, or geometric domains,
+as is often the case when solving time-stepping dynamics problems or optimization problems.
+Surrogate models allow fast approximate PDE solving, but existing surrogates
+require fixing a vector representation for the PDE's factors of variation
+(including governing equations, geometry, and boundary conditions) and for its
+solution.
+This makes it difficult to use surrogates
+where the PDEs we encounter may have complex and varying geometry,
+often requiring different meshes and representations for each problem.
+Meanwhile, neural networks have drawn interest as a basis to solve PDEs
+as they do not require a mesh and allow conditioning on observed data or measurements
+via combining a governing equation loss with a supervised loss,
+but they take far too long to optimize to be competitive with finite-element methods.
+
+We use meta-learning to allow an alternative API for surrogate modeling.
+Our model, Meta-PDE, takes as input a sampler for points in the PDE domain and
+a variational energy density which measures deviation of a
+given solution from the govening equations at a given point.
+We use a neural network to represent the solution field, and train an initialization such that
+it can quickly minimize the variational energy after a few stochastic gradient steps.
+This functional API does not require fixing a parametric basis for the geometry or
+governing equations.
+It also does not require generating supervised data by
+querying expensive finite element solvers.
+We demonstrate Meta-PDE on a nonlinear Poisson problem and a nonlinear stokes
+fluid-flow equation, and show it can amortize PDE solving
+across different boundary conditions, governing equations,
+and problem geometries.
+The resulting meta-models can solve these PDEs faster than FEA,
+and many orders of magnitude faster than by
+training a neural network for a single PDE.
+
+% Feedback
+% \begin{itemize}
+ % \item abstract higher level
+%  \item mention dynamics problems as motivation
+%  \item mention meshfree methods in intro
+%  \item collocation methods -- meshfree
+%  \item show point sampling for different domains
+%  \item monte carlo variance vs geometric error
+%  \item geometries not represented by vectors --
+%  varying topology;
+%  shape-as-program;
+%  \item sampling points on boundary: programmatic
+%\end{itemize}
+\input{meta-pde/sections/1_intro}
+\input{meta-pde/sections/2_fea}
+\input{meta-pde/sections/3_surrogates}
+\input{meta-pde/sections/4_pinn}
+\input{meta-pde/sections/5_metapde}
+\input{meta-pde/sections/6_experiments}
+% \input{meta-pde/sections/7_discussion}
+\section{Conclusion}
+We presented Meta-PDE, a surrogate model uses meta-learning to amortize PDE solving
+across classes of PDEs with complex and varying geometries and governing equations.
+Meta-PDE takes as input the governing equations themselves and a sampler for the
+PDE domain and boundary, thus remaining as close as possible in API to the fundamental
+representation of the PDE in terms of governing equations and domain.
+This avoids having to fix a parametric representation of geometry, governing equations
+and solution for the class of PDEs to be amortized.
+We show on a nonlinear Poisson problem that Meta-PDE can learn to output accurate
+solutions with a significantly more favorable accuracy-speed tradeoff than
+a baseline finite element solver.
+
+\chapter{Conclusion}
+In this thesis, we presented several methods using deep learning and
+stochastic gradient estimation to speed up numerical modeling.
+There is an increasing and justified interest in using neural networks and other
+tools from the discipline of machine learning to accelerate numerical procedures
+(as function approximation has been used to do for decades).
+As researchers and engineers increasingly integrate machine learning into
+numerical modeling, it will often be tempting to think about either machine learning
+or the numerical procedure or both as a black box
+-- to use a numerical method as just a source of parameter vector, solution vector
+pairs for a regression dataset, or to use machine learning methods as just a tool
+for doing said regression.
+In certain scenarios, where data is plentiful and conforms to such a schema,
+such an approach can be appropriate and can have great results.
+
+However, going beyond this shallow approach will let us develop methods which
+are of use in a far wider range of scenarios.
+In this thesis, we showed that
+tailoring machine learning methods to the computational and physical structure of
+numerical models can let us train models on cheap simulations and deploy them
+as surrogates for expensive simulations, or lets us remove the need for
+supervised data entirely,
+and lets us develop new efficient methods for optimization and system identification.
+Perhaps most importantly, synthesis of ML and numerical modeling can allow
+us to develop methods with new and more flexible APIs, and which allow acceleration of
+broader classes of numerical models.
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+
+\appendix
+
+\chapter{List of publications}
+\subsection{Chapter 2}
+\begin{itemize}
+\item \bibentry{beatson2020learning}
+\end{itemize}
+
+\subsection{Chapter 3}
+\begin{itemize}
+  \item \bibentry{beatson2019efficient}
+\end{itemize}
+
+\subsection{Chapter 4}
+\begin{itemize}
+  \item \bibentry{beatson2021meta}
+\end{itemize}
+
+\subsection{Not included in this thesis}
+\begin{itemize}
+\item \bibentry{oktay2021randomized} %
+\item \bibentry{xue2020amortized} %
+\item \bibentry{xue2020data} %
+\item \bibentry{luo2020sumo} %
+\item \bibentry{ravi2018amortized} %
+\item \bibentry{seff2017continual} %
+\item \bibentry{beatson2016blind} %
+\end{itemize}
+
+\chapter{Appendix for Chapter 2}
+\include{lces/appendix}
+
+\chapter{Appendix for Chapter 3}
+\include{rt/appendix}
+
+\end{document}
