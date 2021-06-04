@@ -66,7 +66,7 @@ of the numerical model.
 This thesis presents work using deep learning and stochastic gradient estimation to
 speed up numerical modeling procedures.
 
-In the first chapter we provide a broad introudction to numerical modeling,
+In the first chapter we provide a broad introduction to numerical modeling,
 discuss the motivation for using machine learning (and other approximate methods)
 to speed it up, and discuss a few of the many methods which have been
 developed to do so.
@@ -87,13 +87,13 @@ surrogate modeling.
 These models condition on a functional representation of a PDE and its domain
 by directly taking as input the PDE constraint and a method which returns samples
 in the domain and on the boundary.
-This avoids haivng to fix a parametric representation for PDEs within the class for which
+This avoids having to fix a parametric representation for PDEs within the class for which
 we wish to fit a surrogate, and allows fitting surrogate models for PDEs with
 arbitrarily varying geometry and governing equations.
 
 In aggregate, the work in this thesis aims to take machine learning in numerical modeling
 beyond simple regression-based surrogate modeling,
-and instead tailor machine learning methods to exploit and synergize with the
+and instead tailor machine learning methods to exploit and dovetail with the
 computational and physical structure of numerical models.
 This allows methods which are more computationally and data-efficient,
 and which have vastly less-restrictive APIs,
@@ -141,12 +141,10 @@ Being able to model such systems allows us to reason about the world around us w
 resorting to brute-force experimental trial and error.
 I will use \emph{numerical modeling} to refer to the actions the practitioner takes
 in modeling such systems, which include (i) specifying a
-mathematical model and (ii) choosing and using appropriate numerical methods to
-obtain an approximate solution.
+mathematical model and (ii) choosing and using appropriate numerical methods to obtain an approximate solution.
 
 Numerical modeling is used to solve several related problems.
-The three most important are simulation, optimization, and system or
-parameter identification.
+The three most important are simulation, optimization, and system or parameter identification.
 Simulation is the most basic and fundamental of these.
 Given some set of laws and parameters, to simulate the system is to
 predict or understand how it behaves or evolves by modeling the system's solution
@@ -181,7 +179,7 @@ but almost always still have simulation as a critical subroutine.
 
 The key thing to note is that numerical analysis or simulation allows us to do
 counterfactual reasoning.
-If we assume some hypothetical set of laws and parameters, what happens?
+Given a hypothetical set of laws and parameters, what happens?
 This counterfactual reasoning allows both system optimization and system identification.
 
 Such reasoning and such tasks do not \emph{necessarily} require numerical analysis,
@@ -233,7 +231,7 @@ One might also perform system analysis, optimization or identification experimen
 In this case, analysis involves observing the outcome of a real-world system:
 e.g., measuring the heat at some point on an object or measuring the drag over an
 object in a wind tunnel instead of deriving analytic or numerical solutions to the
-corresponding thermodynmaic PDEs.
+corresponding thermodynamic PDEs.
 
 Counterfactual reasoning (for system optimization or identification) requires the
 ability to construct and observe the system in the real world.
@@ -269,7 +267,7 @@ such as an ordinary differential equation (ODE) or partial differential equation
 (PDE), although naturally there are many other possibilities. The scientist will often
 fix some structure of the model, while allowing some structure or parameters to vary
 over the course of optimizing or fitting the model, or of considering different
-scenraios. For example, we may know that a system should obey the PDE
+scenarios. For example, we may know that a system should obey the PDE
 given by Poisson's equation, or the ODE for celestial motion given by coupling Newton's
 laws of motion with his law of gravity, but over the course of multiple analyses the
 domain, BCs or source terms of Poisson's equation may change,
@@ -295,7 +293,7 @@ might be a field $u(x, y): \mathbb{R}^2 \to \mathbb{R}^1$, but in order to solve
 numerically with finite element analysis (FEA), we represent the continuous solution
 field with a piecewise low-degree polynomial over the domain, which has some finite
 set of coefficients or interpolation points.
-Usualy there is some parameter which controls the fidelity of this approximation: e.g.,
+Usually there is some parameter which controls the fidelity of this approximation: e.g.,
 the number of steps used in solving an ODE or the fineness of a finite element mesh.
 Figure \ref{Fig:mesh_refinement} shows mesh refinement for a finite element model.
 
@@ -525,15 +523,15 @@ for modeling systems with ODEs and PDEs.
 We are often interested in a "ground truth" data generating or labeling process or
 function, or interested in an optimal control policy or decision rule.
 The different flavor of machine learning arises because the description of this function
-does not ususally come in the form of physical constraints it should obey,
+does not usually come in the form of physical constraints it should obey,
 but in the form of some data (e.g., labeled training examples) or interaction
-(e.g., state-action sequences of a reinforcement learning agent and the assosciated
+(e.g., state-action sequences of a reinforcement learning agent and the associated
 rewards) coupled with a loss function (which might include per-datum losses and
 regularization or a prior) we want our function of interest to minimize.
 (Bayesian inference instead comes with an observation model, and the goal is to
 characterize the posterior distribution over functions or parameters of interest).
 
-Another difference is the function approximators typically employed --
+Another difference is the function approximation typically employed --
 neural networks, kernel methods, and linear models, as opposed to the highly structured
 piecewise polynomials and piecewise linear functions often found in physical modeling.
 This is in part because the input and sometimes output spaces in machine learning are
@@ -549,7 +547,7 @@ kernel method.
 In the former case, we search for a good function within the function class via
 (possibly stochastic) optimization, and query this on new inputs of interest
 by passing the data through the neural network.
-In the latter case, finding the optimal representation requries no work for an exact GP
+In the latter case, finding the optimal representation requires no work for an exact GP
 (just storage of the data points) but querying the
 "learned" function on new data requires solving a large linear system. As with physical models,
 we also often wish to place ML-style numerical modeling (whether with NNs, GPs, or
@@ -643,14 +641,13 @@ instead of temporal simulations, or making assumptions about a particular
 term in an equation; or simply using a coarser discretization than would be ideal.
 These approximations both increase the human effort required and introduce a degree of error.
 
-An important concept is the pareto frontier of effort (computational or human) vs accuracy.
+An important concept is the Pareto frontier of effort (computational or human) vs accuracy.
 There will always be a need for new methods or approximations which improve this frontier.
 Such new methods not only decrease the human and computer effort required to run existing
 workloads, but can increase the accuracy of our numerical modeling (because we no longer have
 to cut the corners we once did), and allow us to analyze, identify, and design systems
 too large or complex for the previous state of the art.
-However, if we introduce a new method, it is important to measure it against the
-pareto frontier of an existing method -- not a single point on said frontier.
+However, if we introduce a new method, it is important to measure it against the Pareto frontier of an existing method -- not a single point on said frontier.
 
 Consider a situation where we introduce a method for using neural networks to
 predict the solution to a PDE from some parameters, and show that this produces
@@ -662,7 +659,7 @@ By changing the fidelity of the finite element method (controlled by the density
 the finite element mesh and the polynomial order of the elements) we can also trade off
 accuracy for speed, and it might be the case that simply decreasing the density of the mesh
 can create the same speed up with the same or less increase in error.
-We must measure new methods against a pareto frontier of the existing methods we compare them to.
+We must measure new methods against a Pareto frontier of the existing methods we compare them to.
 Unfortunately, much work in the burgeoning area of machine learning for engineering does
 not do this.
 
@@ -716,7 +713,7 @@ the thesis.
   Given a training set consisting of parameterizations of particular problems $\phi_i$
   and the solutions to those problems $y_i$, we may try to learn an approximation
   $\hat{f}$ to the function/model $f$ which is cheaper to evaluate than $f$ itself.
-  A quintessential example of this is surrogate modelling via simply regressing from the
+  A quintessential example of this is surrogate modeling via simply regressing from the
   training $\phi_i$ to the target solutions $y_i$.\\
   \item \emph{Known computational or physical structure associated with the
   model $f$.} This is a broad category.
@@ -746,7 +743,7 @@ Formally, $\mathcal{T}$ accelerates the sequence if
 $\lim_{n \to \infty} \frac{s'_n - s^*}{s_n - s^*} = 0$.
 However, we are often interested not in just whether $\mathcal{T}$ accelerates the
 sequence but in how fast the new convergence of $s'_n$ to $s^*$ is: e.g.
-if the sequnce is polynomially converging, $|s'_n - s^*| = \mathcal{O}(\nicefrac{1}{n^p})$,
+if the sequence is polynomially converging, $|s'_n - s^*| = \mathcal{O}(\nicefrac{1}{n^p})$,
 we would like $p > 0$ to be as high as possible,
 whereas it would be even better if it were geometrically converging,
 $|s'_n - s^*| = \mathcal{O}(1-p)^n$, where we would like
@@ -758,7 +755,7 @@ $\lim_{n \to \infty} \frac{|s_{n+1} - s^*|}{|s_n - s^*|}$.
 
 These methods can be used to accelerate numerical modeling when we have some
 parameter which trades off computation or effort for fidelity: for example, the
-resolution of a finite element mesh, or the number of steps or inverse stepsize used to solve an ODE,
+resolution of a finite element mesh, or the number of steps or inverse step-size used to solve an ODE,
 or the number of iterations in a Newton method or in an optimization procedure
 used to train a neural network.
 In such cases, we are often interested in
@@ -780,7 +777,7 @@ convergent sequences.
 
 Richardson extrapolation is designed for sequences which have an asymptotic
 expansion $s_n = s^* + C \nicefrac{1}{n^p} + \mathcal{O}(\nicefrac{1}{n^{p+1}})$. (Often, $n$ is the inverse of the
-stepsize of an ODE integrator).
+step-size of an ODE integrator).
 We choose some factor $\tau > 1$ and construct the extrapolation
 \[
 R(n, \tau) = \frac{\tau^p s_n - s_{n/\tau}}{\tau^p - 1}
@@ -827,7 +824,7 @@ Aitken's delta-squared process can be applied to a fixed point
 iteration to derive Steffenson's method, which has quadratic convergence (a la Newton's method) while not requiring derivatives.
 Historically, sequence acceleration methods have been applied to one-dimensional sequences,
 and they can sometimes be lacking when applied naively to higher-dimensional problems (e.g., Steffenson's method runs into a "curse of dimensionality" with high-dimensional root-finding problems).
-Much of the work on sequence accelertation in recent decades has
+Much of the work on sequence acceleration in recent decades has
 been on extending or developing methods for vector sequences \citep{osada1991acceleration}.
 
 
@@ -1000,15 +997,15 @@ discretization-based numerical models.
 In this thesis we present some recently developed methods for accelerating
 numerical modeling, simulation, and design.
 This work has been been the fruit of collaboration with a number of wonderful
-colleagues, without whom it would not have been possible, and without whom
-I would have learnt far less and had far less fun.
+colleagues, without whom it the work would not have been possible, and without whom
+I would have learned far less and had infinitely less fun.
 
 In \textbf{Chapter 2} we present \emph{composable energy surrogates} \citep{beatson2020learning};
 a method which leverages
 modular structure to learn component-level surrogates for modular PDEs; specifically
 those governing mechanical meta-material deformation.
 These mix attributes of surrogate modeling and model order reduction, and allow
-learning of fast approixmate solvers while only using supervision from data collected
+learning of fast approximate solvers while only using supervision from data collected
 by solving cheap PDEs governing component subregions, rather than requiring data
 collected by solving the PDEs governing the full system we wish to solve in deployment.
 This work was presented at NeurIPS 2020 and was carried out in collaboration with
@@ -1059,7 +1056,8 @@ few-shot generalization), which is a crucial principle for Meta-PDE;
 our time thinking hard about bi-level optimization also
 helped ferment the other two chapters.
 Finally,
-"Amortized Finite Element Analysis for Fast PDE-Constrained Optimization" \citep{xue2020amortized},
+"Amortized Finite Element Analysis for Fast PDE-Constrained Optimization"
+\citep{xue2020amortized},
 led by Tianju Xue, laid the foundation for the Meta-PDE
 project by establishing the principle of using a neural network to
 minimize a variational energy rather than a supervised loss,
@@ -1083,7 +1081,7 @@ training data are generated by performing finite element analysis of individual 
 \input{lces/sections/6_deployment}
 \input{lces/sections/7_discussion}
 \section{Conclusion}
-We present a framework for collapsing optimization problems with local bilevel structure by learning composable energy surrogates. This framework is applied to amortizing the solution of PDEs corresponding to mechanical meta-material behavior. Learned composable energy surrogates are more efficient than high-fidelity FEA yet more accurate than low-fidelity FEA, occupying a new point on the Pareto frontier. We believe that these surrogates could accelerate metamaterial design, as well as design and identification of other systems described by PDEs with parametric modular structure.
+We present a framework for collapsing optimization problems with local bilevel structure by learning composable energy surrogates. This framework is applied to amortizing the solution of PDEs corresponding to mechanical meta-material behavior. Learned composable energy surrogates are more efficient than high-fidelity FEA yet more accurate than low-fidelity FEA, occupying a new point on the Pareto frontier. We believe that these surrogates could accelerate meta-material design, as well as design and identification of other systems described by PDEs with parametric modular structure.
 
 \chapter{Efficient optimization of loops and limits with randomized telescoping sums}
 We consider optimization problems in which the objective requires an inner loop with many steps or is the limit of a sequence of increasingly costly approximations.
@@ -1142,7 +1140,7 @@ but they take far too long to optimize to be competitive with finite-element met
 We use meta-learning to allow an alternative API for surrogate modeling.
 Our model, Meta-PDE, takes as input a sampler for points in the PDE domain and
 a variational energy density which measures deviation of a
-given solution from the govening equations at a given point.
+given solution from the governing equations at a given point.
 We use a neural network to represent the solution field, and train an initialization such that
 it can quickly minimize the variational energy after a few stochastic gradient steps.
 This functional API does not require fixing a parametric basis for the geometry or
