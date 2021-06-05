@@ -27,8 +27,8 @@ the inputs to the Meta-PDE model are:
 
 The operators $\mathcal{F}$ and $\mathcal{G}$ may be supplied directly and do not
 require a particular parametric form.
-The user must supply a sampler for the domain and for the boundary of each PDE within
-the training distribution and for each PDE seen during deployment.
+The user must suppy a sampler for the domain and for the boundary of each PDE within
+the training disribution and for each PDE seen during deployment.
 A sampler can easily be constructed for any domain for which we have a mesh,
 but it is also often easier to construct a sampler than to construct an accurate mesh.
 Finite element models usually use piecewise linear meshes, which can take many elements
@@ -70,7 +70,7 @@ the initialization $\theta_0$:
   \theta_k = \theta_{k-1} - \alpha_k \nabla_{\theta_{k-1}} \hat{\mathcal{J}}(u_{\theta_{k-1}}) \quad k = 1 .. K
 \end{align*}
 
-Meta-PDE returns the approximate solution $u_{\theta_K}$, the neural network
+Meta-PDE returns the approixmate solution $u_{\theta_K}$, the neural network
 with the final set of parameters.
 
 To train Meta-PDE, we use a distribution of tasks, each specified by

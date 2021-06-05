@@ -82,8 +82,7 @@ accurate macroscopic behavior when composed.
 
 In chapter 3 we discuss randomized telescoping gradient estimators, which provide unbiased gradient estimators for objectives which are the limit of a sequence of increasingly accurate, increasingly costly approximations -- as we often encounter in numerical modeling. These estimators represent the limit as a telescoping sum and sample linear combinations of terms to provide cheap unbiased estimates. We discuss conditions which permit finite variance and computation, optimality of certain estimators within this class, and application to problems in numerical modeling and machine learning.
 
-In chapter 4 we discuss meta-learned implicit PDE solvers, which allow a new API for
-surrogate modeling.
+In chapter 4 we discuss meta-learned implicit PDE solvers, which allow a new API for surrogate modeling.
 These models condition on a functional representation of a PDE and its domain
 by directly taking as input the PDE constraint and a method which returns samples
 in the domain and on the boundary.
@@ -96,40 +95,119 @@ beyond simple regression-based surrogate modeling,
 and instead tailor machine learning methods to exploit and dovetail with the
 computational and physical structure of numerical models.
 This allows methods which are more computationally and data-efficient,
-and which have vastly less-restrictive APIs,
+and which have less-restrictive APIs,
 which might better empower scientists and engineers.
 }
 
 
 \acknowledgements{
-This PhD has been a wonderful journey, entirely due to the village of people
+This PhD has been a wonderful journey, entirely due to the host of people whom I have
+had the privilege of sharing it with.
 
+For most of my PhD I have had the great fortune to be advised by Ryan Adams.
+Ryan cares deeply about his group, about scholarship, about the community, and about
+doing the right thing in the right way.
+He has taught me how to do research and perhaps more importantly how to be a researcher.
+As well as being a technical encyclopedia and teaching me whatever little I know about
+how to reason, work, write, and communicate, I have learned much from him
+about self-management, collaboration, and how to navigate
+the professional landscapes of machine learning, engineering, and academia.
 
-I started this journey advised by Barbara Engelhardt in the BEEhive.
-Although genomics was not my area of interest,
-Barbara provided a wonderful environment
+It has not been the smoothest road.
+I had and have much to learn, and I fall far short of Ryan's example and his work ethic.
+And on this journey our reach has often exceeded our grasp.
+But it has been the greatest of privileges.
+Ryan has a talent for making you feel like you are steering the ship even as he
+hands you the ship, corrects your bearing, and puts the wind in its sails. The best gift from Ryan, to paraphrase David Whyte,
+has been the invitation to be a full participant in the conversation,
+as we walk this road, together with our collaborators,
+with all its difficulties and minor triumphs,
+and the invitation to discover the core artistry that makes this journey a journey.
 
+I'm incredibly grateful to the other collaborators I've worked with during this PhD,
+who have made the work in this thesis possible and from whom I've learned so much,
+and to my colleagues in LIPS,
+who have provided insightful discussions, banter, and camaraderie:
+Tianju Xue, Sachin Ravi, Jordan Ash, Deniz Oktay, Ricky Chen, Ari Seff,
+Geoffrey Roeder, Yucen Luo, Nick McGreivy, Sunny Qin, Josh Aduol,
+Daniel Suo, Zhaoran Wang, Dian Cai, Greg Gundersen, Sulin Liu, Jad Rahme, Yaniv Ovadia,
+Sam Barnett, and more.
+In both cases, the times we spent at the whiteboard, pair programming, talking shop,
+or even on slack or zoom, have been the most enjoyable and educational times of my PhD.
 
-A few people made my early PhD journey
+When I started my PhD I had the fortune of being initially assigned to the
+mentorship of Barbara Engelhardt and to share an office with her lab (the BEEhive).
+Even though genomics (her application area) was not my area of interest,
+Barbara and her group provided an incredibly welcoming environment for someone who
+was new to the USA and relatively new to machine learning.
+I owe a debt to her and to BEEhive members Bianca,
+Allison, Greg, Li-Fang, Derek and Niranjani for helping me feel at home and
+for helping me navigate my initial steps both in the field of machine learning and in Princeton and the Computer Science department.
 
-To my friends in the department --
-To my collaborators - Jordan Ash, Ricky Chen, Sachin Ravi, Ari Seff, Geoffrey Roeder, Yucen Luo,
+For the first two years of my PhD I worked with Han Liu.
+Han is a brilliant teacher and font of statistical knowledge.
+I will forever benefit from learning statistical ML and linear algebra from him.
+I'm also greatly indebted to his former student Zhaoran Wang, who took me under his wing
+in my first year and helped me write my first NeurIPS paper.
+I had no idea what I was doing,
+but Zhaoran handed me an idea and provided clear guidance and every resource
+each step of the way.
+The reality distortion field of his enthusiasm, confidence and
+guidance tricked me into working step by step
+until we had written a paper seemingly without encountering an obstacle.
+It wasn't until later that I understood providing this sort of
+"effortless" guidance to another is much more difficult than doing something yourself.
 
+I'm very grateful to my mentors from wonderful summers at Google: Pedro Moreno and
+Mohamed Elfeky from Google NYC, who hosted me in 2016, and Olivier Teytaud, Sylvain
+Gelly, and Karol Kurach from Google Brain Zurich, who hosted me in 2017.
+Both experiences taught me so much about how to code, how to carry out machine
+learning at scale, and about how to navigate the world of industry.
 
-The authentic watermark running through the background of a life's work is an arrival at generosity,
-and as a mark of that generosity,
-delight in the hope of the young: and the giving away to them,
-not only of the rewards that may have been earned but the reward in the secret itself,
-the core artistry that made the journey a journey.
-Perhaps the greatest legacy we can leave from our work is not to instill ambition in others,
-though this may be the first way we describe its arrival in our life,
-but the passing on of a sense of sheer privilege,
-of having found a road, a way to follow,
-and then having been allowed to walk it, often with others,
-with all its difficulties and minor triumphs;
-the underlying primary gift, of having been a full participant in the conversation.
+My time at Princeton and in the USA has been a joy
+due to the many and hopefully lifelong friends I've been lucky enough to spend it
+with.
+These have been some of the best years of my life,
+and I hope to share many more adventures with you all.
+I am thankful for the CS lunch and happy hour crews and the officemates at Prospect Ave and
+at each floor of Olden St, the first year study groups, the dinner party crew,
+from trips to the Caribbean, skiing, and hiking,
+the movie club, the book club,
+my flatmates over the years,
+and those who have joined in brunches, barbecues, board games, walks, parties, road trips, and tennis.
+I'm also grateful to friends made in Philadelphia when I escaped from the Princeton
+bubble for a year in the big city,
+in New York and Zurich who made me feel at home during summers interning,
+and those who have hosted me in Princeton and Philly during the nomadic
+final period of my PhD in which I have written up this thesis,
+as I return to the US after escaping Covid to NZ.
+Particular thanks go out to Chase, Ari, Luca,
+Nina, and Bernardo, with whom I have spent countless hours,
+and also to Mikkel, Ghassen, Hussein, Sachin, Tom, Geoffrey, Brett,
+Reyhan, Olek, Christian, Victoria,
+Jennie, Ari S, Ari G, Sam, Tas,
+Susan, Zoe, and many more.
 
+A few people from home should be mentioned.
+I am probably doing research today due to coffees in college with Shaun Davidson and his excitement about and clarity of thinking and explanation of his own work.
+Our bet, where the person who showed up early to the lab the fewest times in a week had to pay for coffee, is still the most effective work motivator I have had.
+Nick Mutch showed me by example that there is a whole world beyond NZ to explore, and
+we should go after what we want rather than letting tall poppy syndrome hold us back.
+Andrew McErlich has provided a guiding example of dedication to a calling while
+remaining grounded and focussed on the things in life that matter.
+Timmy Hu has always taught me to think bigger and understand the world while providing
+a welcoming home and tour guide every time I visited Auckland.
+Geoff Chase, my undergrad senior year advisor,
+made this path possible with his mentorship and set me on it by insisting
+he would only write me a recommendation letter for PhD
+programs rather than masters programs.
 
+Finally, all of this has been made possible by my family. Thank you to Erin and Tane
+for your empathy, insight into your own crafts and processes, and camaraderie as
+we go through life.
+Thank you to my parents Meg and Rick for your unconditional and endless love and support,
+both during these years and the decades prior, without which nothing I do would
+be possible.
 }
 
 % \dedication{To be included in final copy}
@@ -1215,7 +1293,7 @@ representation of the PDE in terms of governing equations and domain.
 This avoids having to fix a parametric representation of geometry, governing equations
 and solution for the class of PDEs to be amortized.
 We show on a nonlinear Poisson problem that Meta-PDE can learn to output accurate
-solutions with a significantly more favorable accuracy-speed tradeoff than
+solutions with a significantly more favorable accuracy-speed trade-off than
 a baseline finite element solver.
 
 \chapter{Conclusion}
